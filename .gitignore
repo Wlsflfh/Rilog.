@@ -35,3 +35,9 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Local visual brainstorming artifacts
+.superpowers/
+
+# Runtime uploaded files
+src/main/resources/static/uploads/

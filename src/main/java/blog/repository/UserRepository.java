@@ -1,0 +1,16 @@
+package blog.repository;
+
+import blog.domain.AuthProvider;
+import blog.domain.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+
+    Optional<User> findByProviderAndProviderSubject(AuthProvider provider, String providerSubject);
+
+    Optional<User> findByUsername(String username);
+
+    boolean existsByUsername(String username);
+}

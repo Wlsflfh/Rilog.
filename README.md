@@ -189,3 +189,36 @@ DTO에서 @NotNull로 막았는데 Domain까지 null이 왔다는 건 검증 로
 `MethodArgumentTypeMismatchException` 등과 같은 나머지 기본 예외들은 스프링 기본 응답 형식을 이용한다.
 
 이유: @Valid에 @NotNull, @Size, @Positive 같은 기본 입력 형식 검증은 사용자가 자주 보게 될 것이기 때문에 이 예외는 @Override해서 정제된 메세지를 주는 건 의미가 있다고 생각했습니다.
+
+---
+
+## 테스트 작성 규칙
+
+- 테스트 메서드명은 의도가 드러나는 간단한 영어로 작성한다.
+- 테스트 설명은 `@DisplayName`에 한글로 작성한다.
+- 테스트 본문은 `// given`, `// when`, `// then` 주석으로 구분한다.
+- 예외 검증처럼 실행과 검증이 붙어 있는 경우 `// when - then`을 사용한다.
+
+---
+
+## Google 로그인 설정
+
+Google Cloud Console에서 OAuth 2.0 Client를 만들고 승인된 리디렉션 URI를 다음과 같이 등록한다.
+
+```text
+http://localhost:8080/login/oauth2/code/google
+```
+
+애플리케이션 실행 전 Client ID와 Secret을 환경변수로 전달한다.
+
+```bash
+export GOOGLE_CLIENT_ID=발급받은-client-id
+export GOOGLE_CLIENT_SECRET=발급받은-client-secret
+```
+
+- 로그인 시작: `GET /oauth2/authorization/google`
+- 현재 사용자 조회: `GET /auth/me`
+- CSRF 토큰 조회: `GET /auth/csrf`
+- 로그아웃: `POST /logout` (CSRF 토큰 필수)
+
+상태 변경 요청은 세션 쿠키와 함께 `/auth/csrf`에서 받은 헤더 이름과 토큰 값을 전송해야 한다. 운영 환경에서는 `prod` 프로필을 활성화해 세션 쿠키의 `Secure` 속성을 강제한다.
