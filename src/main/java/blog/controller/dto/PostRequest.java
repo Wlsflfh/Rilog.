@@ -1,5 +1,6 @@
 package blog.controller.dto;
 
+import blog.domain.PostContentType;
 import blog.domain.PostStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,7 +21,23 @@ public record PostRequest(
         @Size(max = 500, message = "썸네일 URL은 500글자 이하여야 합니다.")
         String thumbnailUrl,
 
+        PostContentType contentType,
+
         @NotNull(message = "게시글 상태는 필수입니다.")
         PostStatus postStatus
 ) {
+
+    public PostRequest(
+            String title,
+            String content,
+            String summary,
+            String thumbnailUrl,
+            PostStatus postStatus
+    ) {
+        this(title, content, summary, thumbnailUrl, null, postStatus);
+    }
+
+    public PostContentType contentTypeOrDefault() {
+        return contentType == null ? PostContentType.MARKDOWN : contentType;
+    }
 }

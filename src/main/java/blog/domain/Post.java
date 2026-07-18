@@ -39,6 +39,10 @@ public class Post {
     @Column(columnDefinition = "LONGTEXT", nullable = false)
     private String content;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PostContentType contentType;
+
     private String thumbnailUrl;
 
     @Enumerated(EnumType.STRING)
@@ -52,7 +56,7 @@ public class Post {
     private LocalDateTime updatedAt;
 
     public Post(User user, String title, String content, String thumbnailUrl, PostStatus postStatus) {
-        this(user, title, content, thumbnailUrl, postStatus, defaultSlug(title), defaultSummary(content));
+        this(user, title, content, thumbnailUrl, postStatus, defaultSlug(title), defaultSummary(content), PostContentType.MARKDOWN);
     }
 
     public Post(
@@ -64,9 +68,23 @@ public class Post {
             String slug,
             String summary
     ) {
+        this(user, title, content, thumbnailUrl, postStatus, slug, summary, PostContentType.MARKDOWN);
+    }
+
+    public Post(
+            User user,
+            String title,
+            String content,
+            String thumbnailUrl,
+            PostStatus postStatus,
+            String slug,
+            String summary,
+            PostContentType contentType
+    ) {
         this.user = requireNonNull(user, INVALID_INPUT, "유저 정보는 비어있을 수 없습니다.");
         this.title = requireNonNull(title, INVALID_INPUT, "제목은 비어있을 수 없습니다.");
         this.content = requireNonNull(content, INVALID_INPUT, "본문은 비어있을 수 없습니다.");
+        this.contentType = defaultContentType(contentType);
         this.thumbnailUrl = thumbnailUrl;
         this.postStatus = requireNonNull(postStatus, INVALID_INPUT, "게시 상태는 비어있을 수 없습니다.");
         this.slug = requireNonNull(slug, INVALID_INPUT, "게시글 주소는 비어있을 수 없습니다.");
@@ -90,6 +108,24 @@ public class Post {
         this.postStatus = postStatus;
         this.slug = requireNonNull(slug, INVALID_INPUT, "게시글 주소는 비어있을 수 없습니다.");
         this.summary = summary;
+    }
+
+    public void update(
+            String title,
+            String content,
+            String thumbnailUrl,
+            PostStatus postStatus,
+            String slug,
+            String summary,
+            PostContentType contentType
+    ) {
+        this.title = title;
+        this.content = content;
+        this.thumbnailUrl = thumbnailUrl;
+        this.postStatus = postStatus;
+        this.slug = requireNonNull(slug, INVALID_INPUT, "게시글 주소는 비어있을 수 없습니다.");
+        this.summary = summary;
+        this.contentType = defaultContentType(contentType);
     }
 
     public void ensureOwnedBy(Long userId) {
@@ -136,6 +172,10 @@ public class Post {
             return normalized;
         }
         return normalized.substring(0, 160);
+    }
+
+    private static PostContentType defaultContentType(PostContentType contentType) {
+        return contentType == null ? PostContentType.MARKDOWN : contentType;
     }
 
     @PrePersist

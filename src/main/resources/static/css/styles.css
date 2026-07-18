@@ -1340,6 +1340,204 @@ body:has(.editor-page) .app-header {
 }
 .markdown-placeholder { color: var(--text-tertiary); }
 
+.template-page {
+    display: grid;
+    gap: 18px;
+    width: min(100%, 980px);
+    margin: 72px auto;
+}
+
+.template-page h1 {
+    margin: 0;
+    font-size: clamp(38px, 6vw, 64px);
+    line-height: 1.08;
+    letter-spacing: -.06em;
+}
+
+.template-page p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 18px;
+}
+
+.template-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.template-card {
+    display: grid;
+    gap: 12px;
+    min-height: 230px;
+    padding: 28px;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    transition: border var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+
+.template-card:hover {
+    border-color: var(--navy-700);
+    transform: translateY(-2px);
+    box-shadow: 0 24px 70px rgba(7, 16, 71, .14);
+}
+
+.template-badge {
+    width: fit-content;
+    padding: 7px 11px;
+    color: var(--navy-700);
+    background: var(--navy-100);
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.template-card strong {
+    font-size: 30px;
+    line-height: 1.15;
+    letter-spacing: -.05em;
+}
+
+.canvas-editor {
+    overflow: hidden;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 18px 55px rgba(7, 16, 71, .06);
+}
+
+.canvas-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 58px;
+    padding: 9px 12px;
+    background: var(--canvas-subtle);
+    border-bottom: 1px solid var(--border);
+}
+
+.canvas-tool {
+    min-height: 36px;
+    padding: 7px 12px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.canvas-tool:hover {
+    color: var(--text);
+    background: var(--navy-100);
+}
+
+.canvas-image-input {
+    display: none;
+}
+
+.canvas-stage,
+.canvas-document {
+    position: relative;
+    min-height: min(66vh, 760px);
+    overflow: auto;
+    background:
+            radial-gradient(circle, color-mix(in srgb, var(--text-tertiary) 22%, transparent) 1px, transparent 1px),
+            var(--surface-raised);
+    background-size: 28px 28px;
+}
+
+.canvas-document {
+    min-height: 620px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.detail-content-canvas {
+    font-size: 16px;
+    line-height: 1.55;
+}
+
+.canvas-node {
+    position: absolute;
+    overflow: hidden;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    box-shadow: 0 16px 40px rgba(7, 16, 71, .10);
+}
+
+.canvas-node-text {
+    width: 100%;
+    height: 100%;
+    padding: 18px;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+.canvas-node img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.canvas-node-editable {
+    overflow: visible;
+}
+
+.canvas-node-drag {
+    position: absolute;
+    z-index: 2;
+    top: -30px;
+    left: 0;
+    padding: 5px 9px;
+    color: white;
+    background: #071047;
+    border-radius: 999px;
+    cursor: grab;
+    font-size: 11px;
+    font-weight: 850;
+    user-select: none;
+}
+
+.canvas-node-input {
+    width: 100%;
+    height: 100%;
+    padding: 18px;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 0;
+    border-radius: 0;
+    line-height: 1.65;
+    resize: none;
+}
+
+.canvas-node-resize {
+    position: absolute;
+    right: -7px;
+    bottom: -7px;
+    width: 16px;
+    height: 16px;
+    background: var(--navy-700);
+    border: 2px solid var(--surface-raised);
+    border-radius: 50%;
+    cursor: nwse-resize;
+}
+
+.canvas-empty {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    margin: 0;
+    color: var(--text-tertiary);
+}
+
 .visibility-field { min-width: 0; margin: 4px 0 0; padding: 0; border: 0; }
 .visibility-title { margin-bottom: 10px; padding: 0; font-size: 18px; font-weight: 850; letter-spacing: -.04em; }
 .visibility-options { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 12px; }

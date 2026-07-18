@@ -1,6 +1,7 @@
 package blog.controller.dto;
 
 import blog.domain.Post;
+import blog.domain.PostContentType;
 import blog.domain.PostStatus;
 import blog.service.PostQueryResult;
 
@@ -15,6 +16,7 @@ public record PostResponse(
         String slug,
         String summary,
         String content,
+        PostContentType contentType,
         String thumbnailUrl,
         PostStatus postStatus,
         long viewCount,
@@ -38,6 +40,7 @@ public record PostResponse(
                 post.getSlug(),
                 post.getSummary(),
                 post.getContent(),
+                post.getContentType(),
                 post.getThumbnailUrl(),
                 post.getPostStatus(),
                 post.getViewCount(),

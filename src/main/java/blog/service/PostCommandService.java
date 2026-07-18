@@ -29,7 +29,8 @@ public class PostCommandService {
                 request.thumbnailUrl(),
                 request.postStatus(),
                 slug,
-                request.summary()
+                request.summary(),
+                request.contentTypeOrDefault()
         );
         return postRepository.save(post).getId();
     }
@@ -44,7 +45,8 @@ public class PostCommandService {
                 request.thumbnailUrl(),
                 request.postStatus(),
                 post.getSlug(),
-                request.summary()
+                request.summary(),
+                post.getContentType()
         );
     }
 

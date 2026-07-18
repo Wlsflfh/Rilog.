@@ -21,6 +21,12 @@ import {
 } from "/js/api.js";
 import {extractHeadings, renderMarkdown} from "/js/markdown.js";
 import {
+    createCanvasEditor,
+    createEmptyCanvasDocument,
+    renderCanvasDocument,
+    serializeCanvasDocument
+} from "/js/canvas-editor.js";
+import {
     addColumnToMarkdownTable,
     addRowToMarkdownTable,
     applyMarkdownAutocomplete,
@@ -36,6 +42,10 @@ const app = document.querySelector("#app");
 const toast = document.querySelector("#toast");
 const profileMenu = document.querySelector("#profile-menu");
 const state = {user: null};
+const POST_CONTENT_TYPES = {
+    MARKDOWN: "MARKDOWN",
+    CANVAS: "CANVAS"
+};
 
 function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -159,6 +169,25 @@ function requireLogin() {
     return false;
 }
 
+function postExcerpt(post) {
+    if (post.summary) return post.summary;
+    if (post.contentType === POST_CONTENT_TYPES.CANVAS) {
+        try {
+            const documentData = JSON.parse(post.content || "{}");
+            const text = (documentData.nodes || [])
+                    .filter(node => node.type === "text")
+                    .map(node => node.content)
+                    .join(" ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            return text || "Canvas로 정리한 글입니다.";
+        } catch {
+            return "Canvas로 정리한 글입니다.";
+        }
+    }
+    return post.content;
+}
+
 function createPostCard(post) {
     const card = element("article", "post-card");
     const content = element("a", "post-card-content");
@@ -166,7 +195,7 @@ function createPostCard(post) {
 
     const category = element("span", "post-label", post.postStatus === "PRIVATE" ? "비공개" : "읽을거리");
     const title = element("h2", null, post.title);
-    const summary = element("p", "post-summary", post.content);
+    const summary = element("p", "post-summary", postExcerpt(post));
     const meta = element("div", "post-meta");
     meta.append(
         element("span", null, `${post.authorNickname} · ${formatDate(post.createdAt)}`),
@@ -696,8 +725,12 @@ async function renderDetail(id) {
             article.append(image);
         }
 
-        const renderedContent = renderMarkdown(post.content);
+        const isCanvasPost = post.contentType === POST_CONTENT_TYPES.CANVAS;
+        const renderedContent = isCanvasPost
+                ? renderCanvasDocument(post.content)
+                : renderMarkdown(post.content);
         const detailContent = element("div", "detail-content");
+        detailContent.classList.toggle("detail-content-canvas", isCanvasPost);
         detailContent.append(renderedContent);
         article.append(detailContent);
         const footer = element("div", "detail-actions");
@@ -721,7 +754,7 @@ async function renderDetail(id) {
         article.append(footer);
         article.append(renderComments(post.id, comments));
 
-        const headings = extractHeadings(post.content);
+        const headings = isCanvasPost ? [] : extractHeadings(post.content);
         if (!headings.length) {
             app.append(article);
             return;
@@ -1154,6 +1187,19 @@ function createMarkdownField(textarea) {
     return field;
 }
 
+function createCanvasField(initialValue, onChange) {
+    const field = element("div", "form-field");
+    field.append(
+        element("span", "field-label", "본문"),
+        createCanvasEditor({
+            initialValue,
+            onChange,
+            uploadImage
+        })
+    );
+    return field;
+}
+
 function createVisibilitySelector(selectedValue) {
     const fieldset = element("fieldset", "visibility-field");
     fieldset.append(element("legend", "visibility-title", "공개 설정"));
@@ -1185,30 +1231,79 @@ function createVisibilitySelector(selectedValue) {
     return fieldset;
 }
 
-function draftKey(userId) {
-    return `rilog-draft:${userId}`;
+function draftKey(userId, contentType = POST_CONTENT_TYPES.MARKDOWN) {
+    return `rilog-draft:${userId}:${contentType}`;
 }
 
-function readDraft(userId) {
+function readDraft(userId, contentType = POST_CONTENT_TYPES.MARKDOWN) {
     try {
-        return JSON.parse(localStorage.getItem(draftKey(userId)) || "null");
+        return JSON.parse(localStorage.getItem(draftKey(userId, contentType)) || "null");
     } catch {
         return null;
     }
 }
 
-function saveDraft(userId, draft) {
-    localStorage.setItem(draftKey(userId), JSON.stringify({
+function saveDraft(userId, contentType, draft) {
+    localStorage.setItem(draftKey(userId, contentType), JSON.stringify({
         ...draft,
+        contentType,
         savedAt: new Date().toISOString()
     }));
 }
 
-function clearDraft(userId) {
-    localStorage.removeItem(draftKey(userId));
+function clearDraft(userId, contentType = POST_CONTENT_TYPES.MARKDOWN) {
+    localStorage.removeItem(draftKey(userId, contentType));
 }
 
-async function renderEditor(editId) {
+function normalizeEditorType(value) {
+    return value?.toLowerCase() === "canvas" ? POST_CONTENT_TYPES.CANVAS : POST_CONTENT_TYPES.MARKDOWN;
+}
+
+function canvasSummary(content) {
+    try {
+        const documentData = JSON.parse(content || "{}");
+        return (documentData.nodes || [])
+                .filter(node => node.type === "text")
+                .map(node => node.content)
+                .join(" ")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 160);
+    } catch {
+        return "";
+    }
+}
+
+function createTemplateCard(type, title, description, href) {
+    const card = element("a", "template-card");
+    card.href = href;
+    card.append(
+        element("span", "template-badge", type),
+        element("strong", null, title),
+        element("p", null, description)
+    );
+    return card;
+}
+
+function renderTemplatePicker() {
+    if (!requireLogin()) return;
+    app.replaceChildren();
+    const section = element("section", "template-page");
+    section.append(
+        element("span", "hero-eyebrow", "Rilog templates"),
+        element("h1", null, "어떤 방식으로 기록할까요?"),
+        element("p", null, "선형으로 정리할 땐 Markdown, 종이처럼 펼쳐놓고 생각할 땐 Canvas를 선택하세요.")
+    );
+    const grid = element("div", "template-grid");
+    grid.append(
+        createTemplateCard("Markdown", "Markdown으로 작성", "글, 코드, 표, 이미지 중심의 기본 개발 블로그 글쓰기.", "#/write?type=markdown"),
+        createTemplateCard("Canvas", "Canvas로 작성", "텍스트와 이미지를 자유롭게 배치하는 공간형 기록.", "#/write?type=canvas")
+    );
+    section.append(grid);
+    app.append(section);
+}
+
+async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN) {
     if (!requireLogin()) return;
     showLoading();
     try {
@@ -1216,7 +1311,8 @@ async function renderEditor(editId) {
         if (post && state.user.id !== post.userId) throw new Error("수정 권한이 없습니다.");
 
         app.replaceChildren();
-        const draft = post ? null : readDraft(state.user.id);
+        const contentType = post?.contentType || requestedType;
+        const draft = post ? null : readDraft(state.user.id, contentType);
         const section = element("section", "editor-page");
 
         const form = element("form", "editor-form");
@@ -1234,6 +1330,7 @@ async function renderEditor(editId) {
         content.rows = 14;
         content.placeholder = "당신의 이야기를 적어보세요...";
         content.value = post?.content || draft?.content || "";
+        let canvasContent = post?.content || draft?.content || serializeCanvasDocument(createEmptyCanvasDocument());
 
         const thumbnail = document.createElement("input");
         thumbnail.type = "url";
@@ -1247,9 +1344,9 @@ async function renderEditor(editId) {
         const cancel = element("a", "editor-exit", "← 나가기");
         cancel.href = post ? `#/posts/${post.id}` : "#/";
         const saveDraftButton = button("임시저장", "button button-secondary", () => {
-            saveDraft(state.user.id, {
+            saveDraft(state.user.id, contentType, {
                 title: title.value,
-                content: content.value,
+                content: contentType === POST_CONTENT_TYPES.CANVAS ? canvasContent : content.value,
                 thumbnailUrl: thumbnail.value,
                 postStatus: form.elements.postStatus.value
             });
@@ -1266,7 +1363,11 @@ async function renderEditor(editId) {
         form.append(
             title,
             element("div", "editor-title-rule"),
-            createMarkdownField(content),
+            contentType === POST_CONTENT_TYPES.CANVAS
+                    ? createCanvasField(canvasContent, value => {
+                        canvasContent = value;
+                    })
+                    : createMarkdownField(content),
             element("div", "editor-options"),
             actions
         );
@@ -1277,10 +1378,14 @@ async function renderEditor(editId) {
         form.addEventListener("submit", async event => {
             event.preventDefault();
             submit.disabled = true;
+            const body = contentType === POST_CONTENT_TYPES.CANVAS ? canvasContent : content.value.trim();
             const payload = {
                 title: title.value.trim(),
-                content: content.value.trim(),
-                summary: content.value.trim().replace(/\s+/g, " ").slice(0, 160),
+                content: body,
+                contentType,
+                summary: contentType === POST_CONTENT_TYPES.CANVAS
+                        ? canvasSummary(body)
+                        : body.replace(/\s+/g, " ").slice(0, 160),
                 thumbnailUrl: thumbnail.value.trim() || null,
                 postStatus: form.elements.postStatus.value
             };
@@ -1291,7 +1396,7 @@ async function renderEditor(editId) {
                     window.location.hash = `#/posts/${post.id}`;
                 } else {
                     const createdPost = await createPost(payload);
-                    clearDraft(state.user.id);
+                    clearDraft(state.user.id, contentType);
                     showToast("글을 발행했어요.");
                     window.location.hash = `#/posts/${createdPost.id}`;
                 }
@@ -1311,7 +1416,9 @@ async function renderEditor(editId) {
 
 async function route() {
     profileMenu.hidden = true;
-    const path = window.location.hash.slice(1) || "/";
+    const fullPath = window.location.hash.slice(1) || "/";
+    const [path, queryString = ""] = fullPath.split("?");
+    const query = new URLSearchParams(queryString);
     document.querySelectorAll("[data-nav]").forEach(link => {
         link.classList.toggle("is-active", link.getAttribute("href") === `#${path}`);
     });
@@ -1320,7 +1427,8 @@ async function route() {
     if (path === "/me") return renderMyPosts();
     if (path === "/dashboard") return renderDashboard();
     if (path === "/settings/profile") return renderProfileSettings();
-    if (path === "/write") return renderEditor();
+    if (path === "/write" && !query.has("type")) return renderTemplatePicker();
+    if (path === "/write") return renderEditor(null, normalizeEditorType(query.get("type")));
     if (path.startsWith("/edit/")) return renderEditor(path.split("/")[2]);
     if (path.startsWith("/@") && path.includes("/posts/")) {
         const [usernamePart, slug] = path.slice(2).split("/posts/");
