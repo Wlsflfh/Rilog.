@@ -1,224 +1,214 @@
-# 방탈출 사용자 예약
+# Rilog.
 
-## 기능 요구 사항
+개발자의 기록이 더 멀리 닿도록 만드는 블로그 플랫폼입니다.
 
-### 부적절한 요청 거부
+Rilog는 Markdown 기반 글쓰기, Google OAuth2 로그인, 좋아요·댓글·통계·프로필 기능을 중심으로 개발 중인 블로그 서비스입니다.  
+목표는 Velog, Tistory처럼 글을 올리는 공간을 넘어서, 개발자가 편하게 쓰고 조용히 발견될 수 있는 플랫폼을 만드는 것입니다.
 
-- [x] 지나간 날짜/시간에 대한 예약은 생성할 수 없다.
-- [x] 같은 날짜/시간/테마에 이미 예약이 있으면 중복 예약할 수 없다.
-  - [x] CANCELED 상태는 예약할 수 있다.
-- [x] 예약이 존재하는 시간및 테마를 삭제할 수 없다.
-- 유효하지 않은 값의 예약을 생성할 수 없다.
-    - [x] 빈 이름
-    - [x] 잘못된 날짜 형식
-    - [x] 시간 정보 없음
-    - [x] 테마 정보 없음
+## 프로젝트 방향
 
-### 내 예약 조회/변경/취소
+Rilog가 중요하게 보는 사용자의 니즈는 두 가지입니다.
 
-- [x] 사용자가 자신의 이름으로 본인의 예약 목록을 조회할 수 있다.
-- [x] 사용자가 본인의 예약을 취소할 수 있다.
-- [x] 사용자가 본인의 예약의 날짜·시간을 변경할 수 있다.
+- 사람들은 은은하게 관심을 받고 싶어 합니다.  
+  좋은 글이 검색과 피드를 통해 자연스럽게 더 많이 노출되어야 합니다.
+- 사람들은 지속적으로 쌓이는 소소한 업적에 기쁨을 느낍니다.  
+  조회수, 좋아요, 댓글, 글 작성 흐름 같은 통계와 기록이 사용자에게 작은 성취감을 줘야 합니다.
 
----
+## 주요 기능
 
-## 에러 응답 명세
+### 글 작성
 
-### 응답 형식
+- Markdown 기반 글 작성
+- 작성 화면과 미리보기 동시 제공
+- Markdown 단축키 지원
+  - `Cmd + B`: 굵게
+  - `Cmd + I`: 기울임
+  - `Cmd + K`: 링크
+  - 인라인 코드, 코드 블록, 인용, 목록, 취소선 등
+- 입력 자동완성
+  - `# + Space`: 제목
+  - `> + Space`: 인용문
+  - `1. + Space`: 번호 목록
+  - `--- + Enter`: 구분선
+  - 백틱 기반 코드 블록
+- 글자 색상 적용
+- 표 삽입과 행/열 추가 UI
+- 이미지 업로드
+- 여러 이미지를 붙여 올렸을 때 그리드로 표시
+- 이미지 클릭 확대 보기
 
-모든 에러 응답은 아래 JSON 구조를 따른다.
+### 글 조회
 
-```json
-{
-  "code": "에러_코드",
-  "message": "사용자에게 표시할 에러 메시지"
-}
-```
-- `code` : 클라이언트가 에러 종류를 구분할 수 있는 코드 메세지
-- `message` : 사용자가 읽을 수 있는 설명
+- 공개 글 피드 조회
+- 개별 글 조회
+- Markdown 렌더링
+- 제목 기반 목차 표시
+- 조회수 증가
+- 좋아요 누른 사람 말풍선 표시
 
-### HTTP 상태 코드별 에러 코드 목록
+### 사용자 기능
 
-#### 400 Bad Request — 유효하지 않은 입력값
+- Google OAuth2 Login 기반 서버 세션 로그인
+- 내 글 조회
+- 내 블로그 프로필 조회
+- 프로필 소개 수정
+- 댓글 작성/삭제
+- 좋아요/좋아요 취소
 
-요청 본문의 형식 또는 값이 잘못된 경우.
+### 통계
 
-| code | 발생 상황                                        | message 예시 |
-|---|----------------------------------------------|---|
-| `VALIDATION_FAILED` | `@Valid` DTO 단에서의 검증 실패 (null, 빈 값, 범위 초과 등) | `요청 값 검증에 실패했습니다.` |
+- 내 글 수
+- 총 조회수
+- 총 좋아요 수
+- 댓글 수
+- 최근 반응 요약
 
-**예시**
+## 기술 스택
 
-```
-POST /reservations
-{ "name": "", "date": "2026-06-01", "timeId": 1, "themeId": 1 }
-```
+- Java 21
+- Spring Boot 3.3.5
+- Spring MVC
+- Spring Security
+- OAuth2 Client
+- Spring Data JPA
+- MySQL
+- H2 Test Database
+- Vanilla JavaScript
+- HTML/CSS
 
-```json
-HTTP/1.1 400 Bad Request
-{
-  "code": "VALIDATION_FAILED",
-  "message": "요청 값 검증에 실패했습니다."
-}
-```
+## 실행 방법
 
----
+### 1. MySQL 실행
 
-#### 404 Not Found — 존재하지 않는 리소스
+기본 설정은 로컬 MySQL의 `blog` 데이터베이스를 사용합니다.
 
-요청한 ID에 해당하는 리소스가 없는 경우.
-
-| code | 발생 상황 | message 예시 |
-|---|---|---|
-| `RESOURCE_NOT_FOUND` | 예약 ID 없음 | `해당 ID의 예약이 존재하지 않습니다. ID: 99` |
-| `RESOURCE_NOT_FOUND` | 예약 시간 ID 없음 | `해당 ID의 예약 시간이 존재하지 않습니다. ID: 99` |
-| `RESOURCE_NOT_FOUND` | 테마 ID 없음 | `해당 ID의 테마가 존재하지 않습니다. ID: 99` |
-
-**예시**
-
-```
-GET /admin/reservations/99
-```
-
-```json
-HTTP/1.1 404 Not Found
-{
-  "code": "RESOURCE_NOT_FOUND",
-  "message": "해당 ID의 예약이 존재하지 않습니다. ID: 99"
-}
+```sql
+CREATE DATABASE blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
----
+기본 접속 정보는 [application.yml](/Users/jinriro/java/spring-roomescape-member_practice/src/main/resources/application.yml) 기준입니다.
 
-#### 409 Conflict — 중복 리소스
-
-동일한 리소스가 이미 존재하는 경우.
-
-| code | 발생 상황 | message 예시 |
-|---|---|---|
-| `DUPLICATE_RESOURCE` | 같은 날짜·시간·테마 예약이 이미 존재 | `이미 해당 날짜와 시간에 예약이 존재합니다.` |
-| `DUPLICATE_RESOURCE` | 동일한 시작 시각의 예약 시간이 이미 존재 | `해당 시간이 이미 존재합니다.` |
-| `DUPLICATE_RESOURCE` | 동일한 이름의 테마가 이미 존재 | `이미 존재하는 테마 이름입니다.` |
-
-**예시**
-
-```
-POST /reservations
-{ "name": "홍길동", "date": "2026-06-01", "timeId": 1, "themeId": 1 }
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/blog
+    username: root
+    password: password
 ```
 
-```json
-HTTP/1.1 409 Conflict
-{
-  "code": "DUPLICATE_RESOURCE",
-  "message": "이미 해당 날짜와 시간에 예약이 존재합니다."
-}
-```
+### 2. Google OAuth2 설정
 
----
-
-#### 422 Unprocessable Entity — 서비스 정책 위반
-
-입력값 형식은 올바르지만, 비즈니스 규칙에 위반되는 경우.
-
-| code | 발생 상황 | message 예시 |
-|---|---|---|
-| `BUSINESS_RULE_VIOLATION` | 과거 날짜·시간으로 예약 생성 시도 | `과거 시각으로는 예약할 수 없습니다.` |
-| `BUSINESS_RULE_VIOLATION` | 이미 취소된 예약을 취소 시도 | `이미 취소된 예약입니다.` |
-| `BUSINESS_RULE_VIOLATION` | 이미 완료된 예약을 취소 시도 | `이미 이용 완료된 예약은 취소할 수 없습니다.` |
-| `BUSINESS_RULE_VIOLATION` | 취소/완료된 예약을 수정 시도 | `이미 취소되었거나 완료된 예약은 수정할 수 없습니다.` |
-| `BUSINESS_RULE_VIOLATION` | 예약이 존재하는 시간 삭제 시도 | `이 시간을 참조하는 예약이 있어 삭제할 수 없습니다. ID: 1` |
-| `BUSINESS_RULE_VIOLATION` | 예약이 존재하는 테마 삭제 시도 | `이 테마를 참조하는 예약이 있어 삭제할 수 없습니다. ID: 1` |
-| `BUSINESS_RULE_VIOLATION` | 이름이 10글자를 초과 | `이름은 10글자 이하여야 합니다. (현재 이름의 글자 수: 11)` |
-| `BUSINESS_RULE_VIOLATION` | 검색 기간의 from이 to보다 늦음 | `from 은 to 보다 이전이어야 합니다.` |
-
-**예시**
-
-```
-POST /reservations
-{ "name": "홍길동", "date": "2020-01-01", "timeId": 1, "themeId": 1 }
-```
-
-```json
-HTTP/1.1 422 Unprocessable Entity
-{
-  "code": "BUSINESS_RULE_VIOLATION",
-  "message": "과거 시각으로는 예약할 수 없습니다."
-}
-```
-
----
-
-#### 500 Internal Server Error — 서버 내부 오류
-
-예상하지 못한 서버 에러. 원인은 서버 로그에만 기록되며, 클라이언트에는 고정된 메시지만 반환된다.
-
-| code | 발생 상황 | message |
-|---|---|---|
-| `INTERNAL_ERROR` | 처리되지 않은 모든 예외 | `일시적인 오류가 발생했습니다.` |
-| `INTERNAL_ERROR` | 도메인 레이어의 값 검증 실패 (빈 이름, null 필드 등) | `예약자 이름은 반드시 입력해야 합니다.` |
-
-```json
-HTTP/1.1 500 Internal Server Error
-{
-  "code": "INTERNAL_ERROR",
-  "message": "일시적인 오류가 발생했습니다."
-}
-```
-```
-클라이언트 요청
-  → DTO @Valid (400 Bad Request)  ← 여기서 걸러져야 한다.
-  → Service
-  → Domain                        ← 여기까지 null 오면 서버 버그로 판단한다.
-```
-
-DTO에서 @NotNull로 막았는데 Domain까지 null이 왔다는 건 검증 로직이 뚫렸거나 개발자 실수라는 뜻이다.
-따라서, Domain 에 NULL이 전달될 경우 이것은 서버 에러로 판단한다. 그러므로, 500 에러를 반환한다.
-
-+) 개선사항
-기존에 domain에서 Object.requireNonNull() 로 NPE를 발생해 500 예외를 반환했습니다. 하지만, NPE는 범용적이라 제 코드 문제인지 라이브러리 문제인지 구분아 어렵다고 생각했습니다.
-따라서, NPE로 표현하는 게 불명확하다는 생각을 하여 `InvalidDomainStateException` 이라는 커스텀 예외를 만들어 500 에러를 반환하도록 변경했습니다.
-
----
-
-#### 스프링 기본 예외
-
-`ResponseEntityExceptionHandler` 를 상속받아 해결
-
-`MethodArgumentNotValidException` 는 override를 통해 정제된 ErrorResponse 사용자에게 반환한다. 이외의 `HttpMessageNotReadableException` 
-`MethodArgumentTypeMismatchException` 등과 같은 나머지 기본 예외들은 스프링 기본 응답 형식을 이용한다.
-
-이유: @Valid에 @NotNull, @Size, @Positive 같은 기본 입력 형식 검증은 사용자가 자주 보게 될 것이기 때문에 이 예외는 @Override해서 정제된 메세지를 주는 건 의미가 있다고 생각했습니다.
-
----
-
-## 테스트 작성 규칙
-
-- 테스트 메서드명은 의도가 드러나는 간단한 영어로 작성한다.
-- 테스트 설명은 `@DisplayName`에 한글로 작성한다.
-- 테스트 본문은 `// given`, `// when`, `// then` 주석으로 구분한다.
-- 예외 검증처럼 실행과 검증이 붙어 있는 경우 `// when - then`을 사용한다.
-
----
-
-## Google 로그인 설정
-
-Google Cloud Console에서 OAuth 2.0 Client를 만들고 승인된 리디렉션 URI를 다음과 같이 등록한다.
+Google Cloud Console에서 OAuth 2.0 Client를 만들고 승인된 리디렉션 URI를 등록합니다.
 
 ```text
 http://localhost:8080/login/oauth2/code/google
 ```
 
-애플리케이션 실행 전 Client ID와 Secret을 환경변수로 전달한다.
+실행 전 환경변수를 설정합니다.
 
 ```bash
 export GOOGLE_CLIENT_ID=발급받은-client-id
 export GOOGLE_CLIENT_SECRET=발급받은-client-secret
 ```
 
-- 로그인 시작: `GET /oauth2/authorization/google`
-- 현재 사용자 조회: `GET /auth/me`
-- CSRF 토큰 조회: `GET /auth/csrf`
-- 로그아웃: `POST /logout` (CSRF 토큰 필수)
+### 3. 애플리케이션 실행
 
-상태 변경 요청은 세션 쿠키와 함께 `/auth/csrf`에서 받은 헤더 이름과 토큰 값을 전송해야 한다. 운영 환경에서는 `prod` 프로필을 활성화해 세션 쿠키의 `Secure` 속성을 강제한다.
+```bash
+./gradlew bootRun
+```
+
+브라우저에서 접속합니다.
+
+```text
+http://localhost:8080
+```
+
+## 주요 API
+
+### 인증
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `GET` | `/oauth2/authorization/google` | Google 로그인 시작 |
+| `GET` | `/auth/me` | 현재 로그인 사용자 조회 |
+| `GET` | `/auth/csrf` | CSRF 토큰 조회 |
+| `POST` | `/logout` | 로그아웃 |
+
+### 게시글
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `GET` | `/posts` | 공개 글 목록 조회 |
+| `GET` | `/posts/{postId}` | 글 상세 조회 |
+| `GET` | `/posts/me` | 내 글 목록 조회 |
+| `POST` | `/posts` | 글 작성 |
+| `PUT` | `/posts/{postId}` | 글 수정 |
+| `DELETE` | `/posts/{postId}` | 글 삭제 |
+
+### 좋아요
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `PUT` | `/posts/{postId}/likes` | 좋아요 |
+| `DELETE` | `/posts/{postId}/likes` | 좋아요 취소 |
+| `GET` | `/posts/{postId}/likes/users` | 좋아요 누른 사용자 조회 |
+
+### 댓글
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `GET` | `/posts/{postId}/comments` | 댓글 목록 조회 |
+| `POST` | `/posts/{postId}/comments` | 댓글 작성 |
+| `DELETE` | `/posts/{postId}/comments/{commentId}` | 댓글 삭제 |
+
+### 사용자·통계·이미지
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `GET` | `/users/{username}` | 사용자 프로필 조회 |
+| `GET` | `/users/{username}/posts` | 사용자 글 목록 조회 |
+| `PATCH` | `/users/me/profile` | 내 프로필 수정 |
+| `GET` | `/stats/me` | 내 통계 조회 |
+| `POST` | `/images` | 이미지 업로드 |
+
+## 에러 응답
+
+모든 애플리케이션 에러 응답은 아래 형식을 따릅니다.
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "요청한 리소스를 찾을 수 없습니다."
+}
+```
+
+- `BlogException`은 서비스 계층에서 맥락 로그를 남기고, 전역 핸들러는 응답 변환만 담당합니다.
+- 예상하지 못한 예외는 `GlobalExceptionHandler`에서 `error` 레벨 스택트레이스로 남깁니다.
+
+## 테스트
+
+### Java 테스트
+
+```bash
+./gradlew test
+```
+
+### Markdown JavaScript 테스트
+
+```bash
+node --test src/test/js/markdown.test.mjs src/test/js/markdown-editor.test.mjs
+```
+
+## 테스트 작성 규칙
+
+- 테스트 메서드명은 의도가 드러나는 간단한 영어로 작성합니다.
+- 테스트 설명은 `@DisplayName`에 한글로 작성합니다.
+- 테스트 본문은 `// given`, `// when`, `// then` 주석으로 구분합니다.
+- 예외 검증처럼 실행과 검증이 붙어 있는 경우 `// when - then`을 사용합니다.
+
+## 개발 메모
+
+- 업로드된 이미지는 로컬 개발 환경에서 `/uploads/**` 경로로 제공됩니다.
+- 실제 업로드 파일은 Git에 포함하지 않도록 `.gitignore`에 등록되어 있습니다.
+- 현재 JPA 설정은 개발 편의를 위해 `ddl-auto: create`입니다.
+- 운영 환경에서는 DB 스키마 관리, 이미지 저장소, 세션 쿠키 `Secure` 설정, OAuth 승인 도메인 설정을 별도로 분리해야 합니다.
