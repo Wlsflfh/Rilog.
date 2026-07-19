@@ -1,6 +1,28 @@
 const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const SAFE_IMAGE_PROTOCOLS = new Set(["http:", "https:"]);
 const COLOR_TOKEN = /^<span style="color:\s*(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})">([\s\S]*?)<\/span>$/;
+const CODE_LANGUAGE_ALIASES = new Map([
+    ["js", "javascript"],
+    ["jsx", "javascript"],
+    ["ts", "typescript"],
+    ["tsx", "typescript"],
+    ["py", "python"],
+    ["sh", "bash"],
+    ["shell", "bash"],
+    ["zsh", "bash"],
+    ["yml", "yaml"]
+]);
+const LIST_INDENT_WIDTH = 4;
+
+function normalizeCodeLanguage(value = "") {
+    const token = value
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)[0]
+        .replace(/[^\w#+.-]/g, "");
+    if (!token) return "";
+    return CODE_LANGUAGE_ALIASES.get(token) || token;
+}
 
 export function normalizeHexColor(value) {
     const match = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(value?.trim() || "");
@@ -239,6 +261,58 @@ function renderTable(lines, index) {
     return {table, nextIndex: index};
 }
 
+function listIndent(source) {
+    return source.replace(/\t/g, " ".repeat(LIST_INDENT_WIDTH)).length;
+}
+
+function parseListLine(line) {
+    const item = /^(\s*)(?:([-*+])|(\d+)\.)\s+(.+)$/.exec(line);
+    if (!item) return null;
+    return {
+        indent: Math.floor(listIndent(item[1]) / LIST_INDENT_WIDTH),
+        ordered: Boolean(item[3]),
+        start: item[3] ? Number(item[3]) : null,
+        content: item[4]
+    };
+}
+
+function isEmptyContinuationMarker(line) {
+    return /^\s*(?:[-*+]|\d+\.|>)\s*$/.test(line);
+}
+
+function renderList(lines, index, baseIndent = null) {
+    const firstItem = parseListLine(lines[index]);
+    const indent = baseIndent ?? firstItem.indent;
+    const ordered = firstItem.ordered;
+    const list = document.createElement(ordered ? "ol" : "ul");
+    let lastListItem = null;
+
+    if (ordered && firstItem.start !== 1) {
+        list.start = firstItem.start;
+    }
+
+    while (index < lines.length) {
+        const item = parseListLine(lines[index]);
+        if (!item || item.indent < indent) break;
+
+        if (item.indent > indent) {
+            if (!lastListItem) break;
+            const nested = renderList(lines, index, item.indent);
+            lastListItem.append(nested.node);
+            index = nested.nextIndex;
+            continue;
+        }
+
+        if (item.ordered !== ordered) break;
+
+        lastListItem = textBlock("li", item.content);
+        list.append(lastListItem);
+        index += 1;
+    }
+
+    return {node: list, nextIndex: index};
+}
+
 export function renderMarkdown(source = "") {
     const container = document.createElement("div");
     container.className = "markdown-body";
@@ -255,7 +329,7 @@ export function renderMarkdown(source = "") {
         }
 
         if (line.startsWith("```")) {
-            const language = line.slice(3).trim();
+            const language = normalizeCodeLanguage(line.slice(3));
             const codeLines = [];
             index += 1;
             while (index < lines.length && !lines[index].startsWith("```")) {
@@ -264,7 +338,11 @@ export function renderMarkdown(source = "") {
             }
             const pre = document.createElement("pre");
             const code = document.createElement("code");
-            if (language) code.dataset.language = language;
+            if (language) {
+                pre.dataset.language = language;
+                code.dataset.language = language;
+                code.className = `language-${language}`;
+            }
             code.textContent = codeLines.join("\n");
             pre.append(code);
             container.append(pre);
@@ -306,25 +384,31 @@ export function renderMarkdown(source = "") {
 
         if (line.startsWith("> ")) {
             const quote = document.createElement("blockquote");
+            let hasContent = false;
             while (index < lines.length && lines[index].startsWith("> ")) {
-                quote.append(textBlock("p", lines[index].slice(2)));
+                const content = lines[index].slice(2);
+                if (content.trim()) {
+                    quote.append(textBlock("p", content));
+                    hasContent = true;
+                }
                 index += 1;
             }
-            container.append(quote);
+            if (hasContent) {
+                container.append(quote);
+            }
             continue;
         }
 
-        const listItem = /^\s*(?:([-*+])|(\d+)\.)\s+(.+)$/.exec(line);
+        if (isEmptyContinuationMarker(line)) {
+            index += 1;
+            continue;
+        }
+
+        const listItem = parseListLine(line);
         if (listItem) {
-            const ordered = Boolean(listItem[2]);
-            const list = document.createElement(ordered ? "ol" : "ul");
-            while (index < lines.length) {
-                const item = /^\s*(?:([-*+])|(\d+)\.)\s+(.+)$/.exec(lines[index]);
-                if (!item || Boolean(item[2]) !== ordered) break;
-                list.append(textBlock("li", item[3]));
-                index += 1;
-            }
-            container.append(list);
+            const {node, nextIndex} = renderList(lines, index);
+            container.append(node);
+            index = nextIndex;
             continue;
         }
 

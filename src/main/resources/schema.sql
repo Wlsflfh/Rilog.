@@ -31,6 +31,7 @@ CREATE TABLE posts (
     slug             VARCHAR(255) NOT NULL,
     summary          VARCHAR(500),
     content          LONGTEXT     NOT NULL,
+    content_type     VARCHAR(20)  NOT NULL DEFAULT 'MARKDOWN',
     thumbnail_url    VARCHAR(500),
     post_status      VARCHAR(20)  NOT NULL,
     view_count       BIGINT       NOT NULL DEFAULT 0,

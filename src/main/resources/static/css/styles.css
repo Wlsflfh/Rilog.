@@ -478,6 +478,10 @@ body:has(.editor-page) .app-header {
     padding: 50px 0;
 }
 
+.post-detail.canvas-post-detail {
+    width: min(100%, var(--page-width));
+}
+
 .blog-profile {
     display: flex;
     align-items: center;
@@ -745,8 +749,13 @@ body:has(.editor-page) .app-header {
 .markdown-body h5,
 .markdown-body h6 { margin: 1.5em 0 .55em; line-height: 1.3; letter-spacing: -.045em; scroll-margin-top: 92px; }
 .markdown-body p { margin: 0 0 1em; }
+.markdown-body p:has(+ ul),
+.markdown-body p:has(+ ol) { margin-bottom: .35em; }
 .markdown-body ul,
-.markdown-body ol { margin: 0 0 1.2em; padding-left: 1.5em; }
+.markdown-body ol { margin: 0 0 .35em; padding-left: 1.5em; }
+.markdown-body li { margin: .05em 0; }
+.markdown-body li > ul,
+.markdown-body li > ol { margin: .15em 0 0; }
 .markdown-body blockquote { margin: 1.4em 0; padding: .35em 1.1em; color: var(--text-secondary); border-left: 4px solid var(--navy-700); }
 .markdown-body blockquote p { margin: 0; }
 .markdown-body a { color: var(--navy-700); text-decoration: underline; text-underline-offset: 3px; }
@@ -775,7 +784,29 @@ body:has(.editor-page) .app-header {
     object-fit: cover;
 }
 .markdown-body code { padding: .15em .38em; background: var(--navy-100); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; }
-.markdown-body pre { overflow-x: auto; padding: 18px; background: var(--canvas-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.markdown-body pre {
+    position: relative;
+    overflow-x: auto;
+    padding: 42px 18px 18px;
+    background: var(--canvas-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.markdown-body pre[data-language]::before {
+    content: attr(data-language);
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 4px 8px;
+    color: var(--text-tertiary);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .01em;
+}
 .markdown-body pre code { padding: 0; background: transparent; }
 .markdown-body hr { margin: 2em 0; border: 0; border-top: 1px solid var(--border); }
 .markdown-body table {
@@ -1026,8 +1057,18 @@ body:has(.editor-page) .app-header {
     gap: 18px;
 }
 
+.editor-title-field {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 14px;
+}
+
 .editor-title-input {
-    width: min(100%, 850px);
+    flex: 0 1 auto;
+    width: 8.8em;
+    max-width: min(100%, 850px);
+    field-sizing: content;
     min-height: 72px;
     padding: 0;
     color: var(--text);
@@ -1038,6 +1079,10 @@ body:has(.editor-page) .app-header {
     font-weight: 900;
     line-height: 1.12;
     letter-spacing: -.055em;
+}
+
+.editor-title-input.field-invalid {
+    box-shadow: none;
 }
 
 .editor-title-input::placeholder {
@@ -1071,6 +1116,30 @@ body:has(.editor-page) .app-header {
 .form-field {
     display: grid;
     gap: 9px;
+}
+
+.field-error {
+    margin: 0;
+    color: var(--danger);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.4;
+    letter-spacing: -.02em;
+}
+
+.field-error:empty {
+    display: none;
+}
+
+.editor-title-error {
+    align-self: center;
+    margin-top: 4px;
+    white-space: nowrap;
+    font-size: clamp(15px, 1.1vw, 18px);
+}
+
+.editor-content-error {
+    margin-top: 2px;
 }
 
 .field-label {
@@ -1138,6 +1207,148 @@ body:has(.editor-page) .app-header {
     font-size: 13px;
     font-weight: 750;
     white-space: nowrap;
+}
+
+.markdown-tool-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    min-width: 38px;
+    padding: 7px 8px;
+    font-size: 18px;
+    font-weight: 850;
+    line-height: 1;
+}
+
+.markdown-tool-heading {
+    width: 48px;
+    min-width: 48px;
+    overflow: visible;
+}
+
+.markdown-tool-word {
+    min-width: 44px;
+}
+
+.markdown-tool-glyph,
+.markdown-tool-svg,
+.markdown-heading-glyph {
+    color: var(--navy-950);
+}
+
+:root[data-theme="dark"] .markdown-tool-glyph,
+:root[data-theme="dark"] .markdown-tool-svg,
+:root[data-theme="dark"] .markdown-heading-glyph {
+    color: #aeb8ff;
+}
+
+.markdown-tool-glyph {
+    display: block;
+    transform-origin: center;
+}
+
+.markdown-heading-glyph {
+    position: relative;
+    display: inline-block;
+    width: 39px;
+    height: 26px;
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1;
+    transform: translateY(-1px);
+    overflow: visible;
+}
+
+.markdown-heading-main {
+    position: absolute;
+    left: 2px;
+    top: 0;
+    font-size: 29px;
+    font-weight: 1000;
+    letter-spacing: -.08em;
+}
+
+.markdown-heading-index {
+    position: absolute;
+    right: 3px;
+    bottom: 2px;
+    font-size: 13px;
+    font-weight: 1000;
+    font-style: italic;
+}
+
+.markdown-tool-r .markdown-tool-glyph {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 27px;
+    font-weight: 1000;
+    letter-spacing: -.08em;
+    line-height: .82;
+}
+
+.markdown-tool-r-italic .markdown-tool-glyph {
+    font-style: italic;
+    transform: skewX(-12deg) translateX(-1px);
+}
+
+.markdown-tool-r-strike .markdown-tool-glyph {
+    text-decoration: line-through;
+    text-decoration-thickness: 3px;
+    text-decoration-color: currentColor;
+}
+
+.markdown-tool-quote .markdown-tool-glyph {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 30px;
+    font-weight: 1000;
+    line-height: .75;
+    transform: translateY(-2px);
+}
+
+.markdown-tool-code .markdown-tool-glyph {
+    font-size: 22px;
+    font-weight: 1000;
+    letter-spacing: -.14em;
+    line-height: .9;
+}
+
+.markdown-tool-code-block .markdown-tool-glyph {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 23px;
+    font-weight: 1000;
+    letter-spacing: -.18em;
+    line-height: .68;
+    transform: translateY(-4px);
+}
+
+.markdown-tool-svg {
+    display: block;
+    width: 29px;
+    height: 29px;
+    stroke-width: 3.45;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.markdown-tool-svg-enter {
+    width: 30px;
+    height: 30px;
+    stroke-width: 3.8;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+}
+
+.markdown-tool-svg * {
+    vector-effect: non-scaling-stroke;
+}
+
+.markdown-tool-svg path:not([stroke]),
+.markdown-tool-svg rect:not([stroke]) {
+    fill: none;
+    stroke: currentColor;
+}
+
+.markdown-tool-svg circle:not([fill]) {
+    fill: currentColor;
+    stroke: none;
 }
 
 .markdown-tool:hover { color: var(--text); background: var(--navy-100); }
@@ -1319,7 +1530,10 @@ body:has(.editor-page) .app-header {
 :root[data-theme="dark"] .markdown-table-tool:hover {
     background: var(--navy-900);
 }
+
 .markdown-writing textarea {
+    position: relative;
+    z-index: 1;
     min-height: min(62vh, 720px);
     height: 100%;
     padding: 42px 30px 30px;
@@ -1368,7 +1582,9 @@ body:has(.editor-page) .app-header {
 }
 
 .template-card {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     gap: 12px;
     min-height: 230px;
     padding: 28px;
@@ -1400,6 +1616,14 @@ body:has(.editor-page) .app-header {
     font-size: 30px;
     line-height: 1.15;
     letter-spacing: -.05em;
+}
+
+.template-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.55;
 }
 
 .canvas-editor {
@@ -1446,10 +1670,12 @@ body:has(.editor-page) .app-header {
     position: relative;
     min-height: min(66vh, 760px);
     overflow: auto;
-    background:
-            radial-gradient(circle, color-mix(in srgb, var(--text-tertiary) 22%, transparent) 1px, transparent 1px),
-            var(--surface-raised);
-    background-size: 28px 28px;
+    background: #f1f3f5;
+}
+
+:root[data-theme="dark"] .canvas-stage,
+:root[data-theme="dark"] .canvas-document {
+    background: #20242b;
 }
 
 .canvas-document {
@@ -1458,76 +1684,313 @@ body:has(.editor-page) .app-header {
     border-radius: var(--radius-md);
 }
 
+.canvas-stage-editable {
+    min-height: 620px;
+    height: 700px;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+}
+
+.canvas-stage-editable.is-panning {
+    cursor: grabbing;
+}
+
+.canvas-board {
+    position: relative;
+    background:
+            radial-gradient(circle, #c8ced8 1.3px, transparent 1.3px),
+            #f1f3f5;
+    background-size: 28px 28px;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+:root[data-theme="dark"] .canvas-board {
+    background:
+            radial-gradient(circle, #4b5568 1.35px, transparent 1.35px),
+            #20242b;
+}
+
 .detail-content-canvas {
     font-size: 16px;
     line-height: 1.55;
 }
 
+.canvas-post-detail .detail-content-canvas {
+    margin-top: 34px;
+    overflow-wrap: normal;
+}
+
+.canvas-detail-viewport {
+    width: 100%;
+    min-height: 460px;
+    height: 700px;
+    overflow: hidden;
+    background: #f1f3f5;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: grab;
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+
+:root[data-theme="dark"] .canvas-detail-viewport {
+    background: #20242b;
+}
+
+.canvas-detail-viewport.is-panning {
+    cursor: grabbing;
+}
+
+.canvas-detail-viewport .canvas-document {
+    width: max-content;
+    border: 0;
+    border-radius: 0;
+}
+
 .canvas-node {
     position: absolute;
-    overflow: hidden;
+    box-sizing: border-box;
+    overflow: visible;
     color: var(--text);
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
+    cursor: grab;
+}
+
+.canvas-node.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.canvas-node-shell {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: color-mix(in srgb, #f7f8fa 88%, white);
+    border: 1px solid color-mix(in srgb, var(--text-tertiary) 42%, transparent);
+    border-radius: 18px;
     box-shadow: 0 16px 40px rgba(7, 16, 71, .10);
 }
 
-.canvas-node-text {
+:root[data-theme="dark"] .canvas-node-shell {
+    background: #151a24;
+}
+
+.canvas-node-image .canvas-node-shell {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+:root[data-theme="dark"] .canvas-stage .canvas-board,
+:root[data-theme="dark"] .canvas-document.canvas-board {
+    background:
+            radial-gradient(circle, #667085 1.55px, transparent 1.55px),
+            #20242b;
+    background-size: 28px 28px;
+}
+
+.canvas-node-text,
+.canvas-node-input {
+    position: absolute;
+    inset: 0;
+    display: block;
+    box-sizing: border-box;
     width: 100%;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     padding: 18px;
     overflow: auto;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
     white-space: pre-wrap;
+    box-shadow: none;
+}
+
+.canvas-edges,
+.canvas-connection-preview {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.canvas-edge {
+    fill: none;
+    stroke: color-mix(in srgb, var(--text-tertiary) 78%, transparent);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.canvas-edges-editable .canvas-edge {
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.canvas-edge-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 18;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.canvas-edge.is-selected {
+    stroke: var(--navy-700);
+    stroke-width: 3.4;
+    filter: drop-shadow(0 10px 22px color-mix(in srgb, var(--navy-700) 26%, transparent));
+}
+
+.canvas-edge-preview {
+    stroke: var(--navy-700);
+    stroke-dasharray: 10 10;
+}
+
+.canvas-arrow-head {
+    fill: color-mix(in srgb, var(--text-tertiary) 78%, transparent);
+}
+
+.canvas-arrow-head-selected {
+    fill: var(--navy-700);
 }
 
 .canvas-node img {
     display: block;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-}
-
-.canvas-node-editable {
-    overflow: visible;
-}
-
-.canvas-node-drag {
-    position: absolute;
-    z-index: 2;
-    top: -30px;
-    left: 0;
-    padding: 5px 9px;
-    color: white;
-    background: #071047;
-    border-radius: 999px;
-    cursor: grab;
-    font-size: 11px;
-    font-weight: 850;
+    object-fit: contain;
+    background: transparent;
+    -webkit-user-drag: none;
     user-select: none;
 }
 
+.canvas-node-editable {
+    z-index: 1;
+    overflow: visible;
+}
+
+.canvas-node-editable.is-selected {
+    z-index: 2;
+}
+
+.canvas-node-editable.is-selected .canvas-node-shell {
+    border-color: color-mix(in srgb, var(--navy-700) 72%, transparent);
+    box-shadow:
+            0 0 0 3px color-mix(in srgb, var(--navy-700) 16%, transparent),
+            0 18px 44px rgba(7, 16, 71, .14);
+}
+
+.canvas-node-image.canvas-node-editable.is-selected .canvas-node-shell {
+    box-shadow: none;
+}
+
+.canvas-node-image.canvas-node-editable.is-selected img {
+    outline: 2px solid color-mix(in srgb, var(--navy-700) 72%, transparent);
+    outline-offset: 4px;
+}
+
 .canvas-node-input {
-    width: 100%;
-    height: 100%;
-    padding: 18px;
-    color: var(--text);
-    background: var(--surface-raised);
-    border: 0;
-    border-radius: 0;
+    appearance: none;
+    -webkit-appearance: none;
     line-height: 1.65;
     resize: none;
+    cursor: text;
+}
+
+.canvas-node-input::-webkit-resizer {
+    display: none;
+}
+
+.canvas-node-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.canvas-node-input:focus {
+    outline: 0;
 }
 
 .canvas-node-resize {
     position: absolute;
-    right: -7px;
-    bottom: -7px;
-    width: 16px;
-    height: 16px;
-    background: var(--navy-700);
-    border: 2px solid var(--surface-raised);
-    border-radius: 50%;
+    z-index: 4;
+    right: 10px;
+    bottom: 10px;
+    width: 34px;
+    height: 34px;
+    background: linear-gradient(135deg,
+            transparent 0 60%,
+            color-mix(in srgb, var(--text-tertiary) 82%, transparent) 61% 68%,
+            transparent 69%);
+    border: 0;
+    border-radius: 0 0 16px 0;
     cursor: nwse-resize;
+}
+
+.canvas-node-connect {
+    --connect-x: 0;
+    --connect-y: 0;
+    position: absolute;
+    z-index: 5;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    opacity: 0;
+    background: var(--navy-700);
+    border: 3px solid var(--surface-raised);
+    border-radius: 50%;
+    box-shadow: 0 12px 28px rgba(7, 16, 71, .24);
+    cursor: crosshair;
+    pointer-events: none;
+    transform: translate(var(--connect-x), var(--connect-y)) scale(.86);
+    transition: opacity var(--transition), transform var(--transition);
+}
+
+.canvas-node-editable:hover .canvas-node-connect,
+.canvas-node-editable:focus-within .canvas-node-connect {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.canvas-node-connect:hover {
+    transform: translate(var(--connect-x), var(--connect-y)) scale(1.08);
+}
+
+.canvas-node-connect-top {
+    --connect-x: -50%;
+    --connect-y: -50%;
+    top: 0;
+    left: 50%;
+}
+
+.canvas-node-connect-right {
+    --connect-x: 50%;
+    --connect-y: -50%;
+    top: 50%;
+    right: 0;
+}
+
+.canvas-node-connect-bottom {
+    --connect-x: -50%;
+    --connect-y: 50%;
+    bottom: 0;
+    left: 50%;
+}
+
+.canvas-node-connect-left {
+    --connect-x: -50%;
+    --connect-y: -50%;
+    top: 50%;
+    left: 0;
 }
 
 .canvas-empty {

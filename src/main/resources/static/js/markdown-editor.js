@@ -5,6 +5,7 @@ const INLINE_SHORTCUTS = new Map([
     ["e", ["`", "`", "코드"]],
     ["x", ["~~", "~~", "텍스트"]]
 ]);
+const INDENT = "    ";
 
 function lineBounds(value, position) {
     const start = value.lastIndexOf("\n", Math.max(0, position - 1)) + 1;
@@ -32,6 +33,12 @@ function prefixCurrentLine(state, prefix, stripPattern = /^\s*(#{1,6}\s+|[-*+]\s
     const replacement = `${prefix}${cleaned}`;
     const cursor = bounds.start + prefix.length + Math.max(0, state.start - bounds.start - (line.length - cleaned.length));
     return replaceRange(state.value, bounds.start, bounds.end, replacement, cursor);
+}
+
+function nextListNumber(marker) {
+    const number = /^(\s*)(\d+)\.\s+$/.exec(marker);
+    if (!number) return marker;
+    return `${number[1]}${Number(number[2]) + 1}. `;
 }
 
 export function applyMarkdownShortcut(state) {
@@ -69,11 +76,35 @@ export function applyMarkdownAutocomplete(state) {
     const line = state.value.slice(bounds.start, state.start);
     const key = state.key || " ";
 
-    if (key === "Enter" && line === "```") {
-        return replaceRange(state.value, bounds.start, state.start, "```\n\n```", bounds.start + 4);
+    if (key === "Enter" && /^```[\w#+.-]*$/.test(line)) {
+        return replaceRange(state.value, bounds.start, state.start, `${line}\n\n\`\`\`\n`, bounds.start + line.length + 1);
     }
     if (key === "Enter" && line === "---") {
         return replaceRange(state.value, bounds.start, state.start, "---\n", bounds.start + 4);
+    }
+    if (key === "Enter") {
+        const quote = /^(\s*>\s*)$/.exec(line);
+        if (quote) {
+            return replaceRange(state.value, bounds.start, state.start, "", bounds.start);
+        }
+
+        const emptyList = /^(\s*)([-*+]|\d+\.)\s*$/.exec(line);
+        if (emptyList) {
+            return replaceRange(state.value, bounds.start, state.start, emptyList[1], bounds.start + emptyList[1].length);
+        }
+
+        const quoteContent = /^(\s*>\s+).+/.exec(line);
+        if (quoteContent) {
+            const replacement = `\n${quoteContent[1]}`;
+            return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
+        }
+
+        const listContent = /^(\s*(?:[-*+]|\d+\.)\s+).+/.exec(line);
+        if (listContent) {
+            const marker = nextListNumber(listContent[1]);
+            const replacement = `\n${marker}`;
+            return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
+        }
     }
     if (key !== " ") return null;
 
@@ -99,11 +130,14 @@ export function indentSelection({value, start, end, outdent = false}) {
     const block = value.slice(selectionStartLine, selectionEndLine);
     const lines = block.split("\n");
     const changed = lines.map(line => {
-        if (outdent) return line.startsWith("  ") ? line.slice(2) : line;
-        return line ? `  ${line}` : line;
+        if (!outdent) return line ? `${INDENT}${line}` : line;
+        if (line.startsWith(INDENT)) return line.slice(INDENT.length);
+        if (line.startsWith("\t")) return line.slice(1);
+        const partialIndent = /^ {1,3}/.exec(line);
+        return partialIndent ? line.slice(partialIndent[0].length) : line;
     }).join("\n");
     const delta = changed.length - block.length;
-    return replaceRange(value, selectionStartLine, selectionEndLine, changed, Math.max(selectionStartLine, start + (outdent ? Math.min(0, delta) : 2)), Math.max(selectionStartLine, end + delta));
+    return replaceRange(value, selectionStartLine, selectionEndLine, changed, Math.max(selectionStartLine, start + (outdent ? Math.min(0, delta) : INDENT.length)), Math.max(selectionStartLine, end + delta));
 }
 
 export function createMarkdownTable() {

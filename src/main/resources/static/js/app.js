@@ -23,6 +23,8 @@ import {extractHeadings, renderMarkdown} from "/js/markdown.js";
 import {
     createCanvasEditor,
     createEmptyCanvasDocument,
+    enableCanvasPanZoom,
+    fitCanvasViewportToContent,
     renderCanvasDocument,
     serializeCanvasDocument
 } from "/js/canvas-editor.js";
@@ -58,6 +60,38 @@ function button(label, className, onClick) {
     const node = element("button", className, label);
     node.type = "button";
     node.addEventListener("click", onClick);
+    return node;
+}
+
+function setFieldError(input, error, message = "") {
+    input.classList.toggle("field-invalid", Boolean(message));
+    input.setAttribute("aria-invalid", message ? "true" : "false");
+    error.textContent = message;
+}
+
+function svgIcon(className, paths) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", `markdown-tool-svg ${className}`);
+    svg.setAttribute("viewBox", "0 0 32 32");
+    svg.setAttribute("aria-hidden", "true");
+    paths.forEach(attributes => {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", attributes.tag || "path");
+        Object.entries(attributes).forEach(([key, value]) => {
+            if (key !== "tag") path.setAttribute(key, String(value));
+        });
+        svg.append(path);
+    });
+    return svg;
+}
+
+function markdownIconTool(icon, label, onClick, extraClass = "") {
+    const node = button("", `markdown-tool markdown-tool-icon ${extraClass}`.trim(), onClick);
+    if (typeof icon === "string") {
+        node.append(element("span", "markdown-tool-glyph", icon));
+    } else {
+        node.append(icon);
+    }
+    node.title = label;
     return node;
 }
 
@@ -711,6 +745,8 @@ async function renderDetail(id) {
         ]);
         app.replaceChildren();
         const article = element("article", "post-detail");
+        const isCanvasPost = post.contentType === POST_CONTENT_TYPES.CANVAS;
+        article.classList.toggle("canvas-post-detail", isCanvasPost);
         const label = element("span", "post-label", post.postStatus === "PRIVATE" ? "비공개" : "읽을거리");
         const title = element("h1", null, post.title);
         const meta = element("div", "detail-meta", `${post.authorNickname} · ${formatDate(post.createdAt)} · 조회 ${post.viewCount}`);
@@ -725,13 +761,25 @@ async function renderDetail(id) {
             article.append(image);
         }
 
-        const isCanvasPost = post.contentType === POST_CONTENT_TYPES.CANVAS;
         const renderedContent = isCanvasPost
                 ? renderCanvasDocument(post.content)
                 : renderMarkdown(post.content);
         const detailContent = element("div", "detail-content");
         detailContent.classList.toggle("detail-content-canvas", isCanvasPost);
-        detailContent.append(renderedContent);
+        if (isCanvasPost) {
+            const viewport = element("div", "canvas-detail-viewport");
+            viewport.append(renderedContent);
+            detailContent.append(viewport);
+            requestAnimationFrame(() => {
+                const initialViewport = fitCanvasViewportToContent(viewport, renderedContent, {
+                    padding: 54,
+                    maxZoom: 1.45
+                });
+                enableCanvasPanZoom(viewport, renderedContent, initialViewport);
+            });
+        } else {
+            detailContent.append(renderedContent);
+        }
         article.append(detailContent);
         const footer = element("div", "detail-actions");
         footer.append(createDetailLikeAction(post, likedUsers));
@@ -806,9 +854,79 @@ function replaceSelectionWithUndo(textarea, text, selectStart = text.length, sel
     textarea.focus();
 }
 
-function insertMarkdown(textarea, before, after = before, placeholder = "텍스트") {
+function isSingleAsteriskToken(value, index) {
+    return value[index] === "*"
+            && value[index - 1] !== "*"
+            && value[index + 1] !== "*";
+}
+
+function findToken(value, token, from) {
+    let index = value.indexOf(token, from);
+    while (index !== -1) {
+        if (token !== "*" || isSingleAsteriskToken(value, index)) {
+            return index;
+        }
+        index = value.indexOf(token, index + 1);
+    }
+    return -1;
+}
+
+function inlineWrapperRanges(value, before, after) {
+    const ranges = [];
+    let searchFrom = 0;
+
+    while (searchFrom < value.length) {
+        const openStart = findToken(value, before, searchFrom);
+        if (openStart === -1) break;
+
+        const contentStart = openStart + before.length;
+        const closeStart = findToken(value, after, contentStart);
+        if (closeStart === -1) break;
+
+        ranges.push({
+            openStart,
+            contentStart,
+            contentEnd: closeStart,
+            closeEnd: closeStart + after.length
+        });
+        searchFrom = closeStart + after.length;
+    }
+
+    return ranges;
+}
+
+function findInlineWrapperAtSelection(value, start, end, before, after) {
+    return inlineWrapperRanges(value, before, after).find(range => {
+        const selectionIncludesWrapper = start === range.openStart && end === range.closeEnd;
+        const selectionInsideWrapper = start >= range.contentStart && end <= range.contentEnd;
+        return selectionIncludesWrapper || selectionInsideWrapper;
+    }) || null;
+}
+
+function unwrapInlineMarkdown(textarea, range, start, end) {
+    const inner = textarea.value.slice(range.contentStart, range.contentEnd);
+    const nextStart = Math.min(inner.length, Math.max(0, start - range.contentStart));
+    const nextEnd = Math.min(inner.length, Math.max(0, end - range.contentStart));
+    textarea.setSelectionRange(range.openStart, range.closeEnd);
+    replaceSelectionWithUndo(
+        textarea,
+        inner,
+        nextStart,
+        nextEnd
+    );
+}
+
+function insertMarkdown(textarea, before, after = before, placeholder = "텍스트", options = {}) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
+    if (options.toggle) {
+        const wrapper = findInlineWrapperAtSelection(textarea.value, start, end, before, after);
+        if (wrapper) {
+            unwrapInlineMarkdown(textarea, wrapper, start, end);
+            return;
+        }
+    }
+
     const selected = textarea.value.slice(start, end) || placeholder;
     textarea.setSelectionRange(start, end);
     replaceSelectionWithUndo(
@@ -823,6 +941,20 @@ function insertMarkdownBlock(textarea, block) {
     const start = textarea.selectionStart;
     textarea.setSelectionRange(start, textarea.selectionEnd);
     replaceSelectionWithUndo(textarea, block);
+}
+
+function insertCodeBlock(textarea) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.slice(start, end);
+    const block = selected ? `\n\`\`\`\n${selected}\n\`\`\`\n` : "\n```\n\n```\n";
+    textarea.setSelectionRange(start, end);
+    replaceSelectionWithUndo(
+        textarea,
+        block,
+        5,
+        selected ? 5 + selected.length : 5
+    );
 }
 
 function applyTextareaEdit(textarea, edit) {
@@ -867,6 +999,10 @@ function handleAutoPair(event, textarea) {
 }
 
 function handleMarkdownKeydown(event, textarea) {
+    if (event.isComposing || event.keyCode === 229) {
+        return false;
+    }
+
     if (event.key === "Tab") {
         event.preventDefault();
         applyTextareaEdit(textarea, indentSelection({
@@ -1024,27 +1160,74 @@ function createMarkdownEditor(textarea) {
             event.preventDefault();
         }
     });
+    const headingIcon = element("span", "markdown-heading-glyph");
+    headingIcon.append(
+        element("span", "markdown-heading-main", "H"),
+        element("span", "markdown-heading-index", "n")
+    );
+    const headingTool = markdownIconTool(headingIcon, "제목", () => insertMarkdown(textarea, "# ", "", "제목"), "markdown-tool-heading");
+    toolbar.append(withTooltip(headingTool, "제목 · Cmd+Option+1~6"));
+
+    const enterIcon = svgIcon("markdown-tool-svg-enter", [
+        {d: "M24 7V21H8"},
+        {d: "M13 16L8 21L13 26"}
+    ]);
+    const lineBreakTool = markdownIconTool(enterIcon, "개행", () => replaceSelectionWithUndo(textarea, "<br>"));
+    toolbar.append(withTooltip(lineBreakTool, "강제 줄바꿈 · <br>"));
+
+    const listIcon = svgIcon("markdown-tool-svg-list", [
+        {tag: "circle", cx: 7, cy: 10, r: 2.1},
+        {tag: "circle", cx: 7, cy: 21, r: 2.1},
+        {d: "M13 10H27"},
+        {d: "M13 21H27"}
+    ]);
+    const linkIcon = svgIcon("markdown-tool-svg-link", [
+        {d: "M12.5 19.5L19.5 12.5"},
+        {d: "M11 12.5L8.4 15.1C6.7 16.8 6.7 19.6 8.4 21.3C10.1 23 12.9 23 14.6 21.3L17.2 18.7"},
+        {d: "M14.8 13.3L17.4 10.7C19.1 9 21.9 9 23.6 10.7C25.3 12.4 25.3 15.2 23.6 16.9L21 19.5"}
+    ]);
+    const tableIcon = svgIcon("markdown-tool-svg-table", [
+        {tag: "rect", x: 5, y: 6, width: 22, height: 20, rx: 1.5},
+        {d: "M5 13H27"},
+        {d: "M5 20H27"},
+        {d: "M12.3 6V26"},
+        {d: "M19.7 6V26"}
+    ]);
+    const imageIcon = svgIcon("markdown-tool-svg-image", [
+        {tag: "rect", x: 5, y: 5, width: 22, height: 22, rx: 1.6, class: "markdown-tool-image-frame", fill: "currentColor", stroke: "none"},
+        {tag: "circle", cx: 21.5, cy: 10.5, r: 1.8, class: "markdown-tool-image-detail", fill: "var(--canvas-subtle)", stroke: "none"},
+        {d: "M8.5 24L14.2 17.6L18 21.2L20.8 17.8L25 24", class: "markdown-tool-image-line", fill: "none", stroke: "var(--canvas-subtle)", "stroke-width": 3.2}
+    ]);
+
     [
-        ["제목", "# ", "", "제목", "제목 · Cmd+Option+1~6"],
-        ["굵게", "**", "**", "강조할 내용", "굵게 · Cmd+B"],
-        ["기울임", "*", "*", "기울일 내용", "기울임 · Cmd+I"],
-        ["링크", "[", "](https://)", "링크 이름", "링크 · Cmd+K"],
-        ["인용", "> ", "", "인용문", "인용문 · Cmd+Shift+9"],
-        ["코드", "`", "`", "code", "인라인 코드 · Cmd+E"],
-        ["목록", "- ", "", "목록 항목", "목록 · Cmd+Shift+8"],
-        ["취소선", "~~", "~~", "취소할 내용", "취소선 · Cmd+Shift+X"]
-    ].forEach(([label, before, after, placeholder, tooltip]) => {
+        [listIcon, "목록", "- ", "", "목록 항목", "목록 · Cmd+Shift+8", ""],
+        ["R", "굵게", "**", "**", "강조할 내용", "굵게 · Cmd+B", "markdown-tool-r markdown-tool-r-bold"],
+        ["R", "기울임", "*", "*", "기울일 내용", "기울임 · Cmd+I", "markdown-tool-r markdown-tool-r-italic"],
+        ["R", "취소선", "~~", "~~", "취소할 내용", "취소선 · Cmd+Shift+X", "markdown-tool-r markdown-tool-r-strike"],
+        ["❞", "인용", "> ", "", "인용문", "인용문 · Cmd+Shift+9", "markdown-tool-quote"],
+        [linkIcon, "링크", "[", "](https://)", "링크 이름", "링크 · Cmd+K", ""],
+        ["<>", "코드", "`", "`", "code", "인라인 코드 · Cmd+E", "markdown-tool-code"]
+    ].forEach(([icon, label, before, after, placeholder, tooltip, extraClass]) => {
+        const togglesInlineStyle = ["굵게", "기울임", "취소선", "코드"].includes(label);
+        const tool = markdownIconTool(
+            icon,
+            label,
+            () => insertMarkdown(textarea, before, after, placeholder, {toggle: togglesInlineStyle}),
+            extraClass
+        );
         toolbar.append(withTooltip(
-            button(label, "markdown-tool", () => insertMarkdown(textarea, before, after, placeholder)),
+            tool,
             tooltip
         ));
     });
+    const codeBlockTool = markdownIconTool("```", "코드 블록", () => insertCodeBlock(textarea), "markdown-tool-code-block");
     toolbar.append(withTooltip(
-        button("개행", "markdown-tool", () => replaceSelectionWithUndo(textarea, "<br>")),
-        "강제 줄바꿈 · <br>"
+        codeBlockTool,
+        "코드 블록 · ```"
     ));
+    const tableTool = markdownIconTool(tableIcon, "표", () => insertMarkdownBlock(textarea, createMarkdownTable()));
     toolbar.append(withTooltip(
-        button("표", "markdown-tool", () => insertMarkdownBlock(textarea, createMarkdownTable())),
+        tableTool,
         "표 삽입"
     ));
     const imageInput = document.createElement("input");
@@ -1059,7 +1242,7 @@ function createMarkdownEditor(textarea) {
         await insertImageFiles(textarea, files);
     });
     toolbar.append(
-        withTooltip(button("이미지", "markdown-tool", () => {
+        withTooltip(markdownIconTool(imageIcon, "이미지", () => {
             textarea.focus();
             imageInput.click();
         }), "이미지 업로드"),
@@ -1068,9 +1251,9 @@ function createMarkdownEditor(textarea) {
 
     const colorTools = element("div", "markdown-colors");
     colorTools.setAttribute("aria-label", "글자 색상");
-    ["#071047", "#25339b", "#e5484d", "#0f8a5f", "#b46b00"].forEach(color => {
+    ["#25339b", "#e5484d", "#0f8a5f", "#f0e800"].forEach(color => {
         const colorButton = button("", "markdown-color", () => {
-            insertMarkdown(textarea, `<span style="color: ${color}">`, "</span>", "색상을 적용할 글");
+            insertMarkdown(textarea, `<span style="color: ${color}">`, "</span>", "색상을 적용할 글", {toggle: true});
         });
         colorButton.style.setProperty("--color-swatch", color);
         colorButton.dataset.tooltip = `${color} 색상 적용`;
@@ -1083,10 +1266,10 @@ function createMarkdownEditor(textarea) {
     customColorLabel.title = "직접 색상 선택";
     const customColor = document.createElement("input");
     customColor.type = "color";
-    customColor.value = "#071047";
+    customColor.value = "#25339b";
     customColor.setAttribute("aria-label", "직접 글자 색상 선택");
     const customColorApply = button("", "markdown-color markdown-custom-color-apply", () => {
-        insertMarkdown(textarea, `<span style="color: ${customColor.value}">`, "</span>", "색상을 적용할 글");
+        insertMarkdown(textarea, `<span style="color: ${customColor.value}">`, "</span>", "색상을 적용할 글", {toggle: true});
     });
     const syncCustomColor = () => {
         customColorApply.style.setProperty("--color-swatch", customColor.value);
@@ -1095,7 +1278,7 @@ function createMarkdownEditor(textarea) {
     };
     customColor.addEventListener("change", () => {
         syncCustomColor();
-        insertMarkdown(textarea, `<span style="color: ${customColor.value}">`, "</span>", "색상을 적용할 글");
+        insertMarkdown(textarea, `<span style="color: ${customColor.value}">`, "</span>", "색상을 적용할 글", {toggle: true});
     });
     customColorLabel.append(customColor);
     syncCustomColor();
@@ -1178,12 +1361,13 @@ function createMarkdownEditor(textarea) {
     return editor;
 }
 
-function createMarkdownField(textarea) {
+function createMarkdownField(textarea, error = null) {
     const field = element("div", "form-field");
     const label = element("label", "field-label", "본문");
     textarea.id = "post-content";
     label.htmlFor = textarea.id;
     field.append(label, createMarkdownEditor(textarea));
+    if (error) field.append(error);
     return field;
 }
 
@@ -1274,11 +1458,10 @@ function canvasSummary(content) {
     }
 }
 
-function createTemplateCard(type, title, description, href) {
+function createTemplateCard(title, description, href) {
     const card = element("a", "template-card");
     card.href = href;
     card.append(
-        element("span", "template-badge", type),
         element("strong", null, title),
         element("p", null, description)
     );
@@ -1296,8 +1479,8 @@ function renderTemplatePicker() {
     );
     const grid = element("div", "template-grid");
     grid.append(
-        createTemplateCard("Markdown", "Markdown으로 작성", "글, 코드, 표, 이미지 중심의 기본 개발 블로그 글쓰기.", "#/write?type=markdown"),
-        createTemplateCard("Canvas", "Canvas로 작성", "텍스트와 이미지를 자유롭게 배치하는 공간형 기록.", "#/write?type=canvas")
+        createTemplateCard("Markdown으로 작성", "글, 코드, 표, 이미지 중심의 기본 개발 블로그 글쓰기.", "#/write?type=markdown"),
+        createTemplateCard("Canvas로 작성", "텍스트와 이미지를 자유롭게 배치하는 공간형 기록.", "#/write?type=canvas")
     );
     section.append(grid);
     app.append(section);
@@ -1316,20 +1499,27 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         const section = element("section", "editor-page");
 
         const form = element("form", "editor-form");
+        form.noValidate = true;
+        const titleField = element("div", "editor-title-field");
         const title = document.createElement("input");
         title.className = "editor-title-input";
-        title.required = true;
         title.maxLength = 255;
         title.placeholder = "제목을 입력하세요";
         title.setAttribute("aria-label", "제목");
         title.value = post?.title || draft?.title || "";
+        const titleError = element("p", "field-error editor-title-error");
+        titleError.setAttribute("aria-live", "polite");
+        title.addEventListener("input", () => setFieldError(title, titleError));
+        titleField.append(title, titleError);
 
         const content = document.createElement("textarea");
-        content.required = true;
         content.maxLength = 100000;
         content.rows = 14;
         content.placeholder = "당신의 이야기를 적어보세요...";
         content.value = post?.content || draft?.content || "";
+        const contentError = element("p", "field-error editor-content-error");
+        contentError.setAttribute("aria-live", "polite");
+        content.addEventListener("input", () => setFieldError(content, contentError));
         let canvasContent = post?.content || draft?.content || serializeCanvasDocument(createEmptyCanvasDocument());
 
         const thumbnail = document.createElement("input");
@@ -1361,13 +1551,13 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         actions.append(actionGroup);
 
         form.append(
-            title,
+            titleField,
             element("div", "editor-title-rule"),
             contentType === POST_CONTENT_TYPES.CANVAS
                     ? createCanvasField(canvasContent, value => {
                         canvasContent = value;
                     })
-                    : createMarkdownField(content),
+                    : createMarkdownField(content, contentError),
             element("div", "editor-options"),
             actions
         );
@@ -1377,10 +1567,23 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         );
         form.addEventListener("submit", async event => {
             event.preventDefault();
-            submit.disabled = true;
             const body = contentType === POST_CONTENT_TYPES.CANVAS ? canvasContent : content.value.trim();
+            const titleText = title.value.trim();
+            setFieldError(title, titleError);
+            setFieldError(content, contentError);
+            if (!titleText) {
+                setFieldError(title, titleError, "제목이 비어있습니다.");
+                title.focus();
+                return;
+            }
+            if (contentType === POST_CONTENT_TYPES.MARKDOWN && !body) {
+                setFieldError(content, contentError, "본문이 비어있습니다.");
+                content.focus();
+                return;
+            }
+            submit.disabled = true;
             const payload = {
-                title: title.value.trim(),
+                title: titleText,
                 content: body,
                 contentType,
                 summary: contentType === POST_CONTENT_TYPES.CANVAS
