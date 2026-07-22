@@ -31,11 +31,13 @@ import {
 import {
     addColumnToMarkdownTable,
     addRowToMarkdownTable,
+    applyAutoPairEdit,
     applyMarkdownAutocomplete,
     applyMarkdownShortcut,
+    createMarkdownLink,
     createMarkdownTable,
-    isInsideMarkdownTable,
-    indentSelection
+    indentSelection,
+    isInsideMarkdownTable
 } from "/js/markdown-editor.js";
 import {barWidth, createInsightMessage, formatStatNumber} from "/js/dashboard.js";
 import {createBlogUrl, normalizeProfilePayload, safeExternalUrl} from "/js/profile-settings.js";
@@ -957,6 +959,36 @@ function insertCodeBlock(textarea) {
     );
 }
 
+function insertMarkdownTable(textarea) {
+    const block = createMarkdownTable();
+    textarea.setSelectionRange(textarea.selectionStart, textarea.selectionEnd);
+    replaceSelectionWithUndo(textarea, block, 3, 5);
+}
+
+function insertToggleBlock(textarea) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.slice(start, end) || "토글 제목";
+    const before = "<details>\n<summary>";
+    const after = "</summary>\n\n내용을 입력하세요.\n\n</details>";
+
+    textarea.setSelectionRange(start, end);
+    replaceSelectionWithUndo(
+        textarea,
+        `${before}${selected}${after}`,
+        before.length,
+        before.length + selected.length
+    );
+}
+
+function insertLink(textarea) {
+    applyTextareaEdit(textarea, createMarkdownLink({
+        value: textarea.value,
+        start: textarea.selectionStart,
+        end: textarea.selectionEnd
+    }));
+}
+
 function applyTextareaEdit(textarea, edit) {
     const before = textarea.value;
     let prefix = 0;
@@ -984,17 +1016,18 @@ function applyTextareaEdit(textarea, edit) {
 }
 
 function handleAutoPair(event, textarea) {
-    const pairs = {
-        "`": "`",
-        "(": ")",
-        "[": "]",
-        "{": "}",
-        "\"": "\"",
-        "'": "'"
-    };
-    if (!pairs[event.key] || event.metaKey || event.ctrlKey || event.altKey) return false;
+    const edit = applyAutoPairEdit({
+        value: textarea.value,
+        start: textarea.selectionStart,
+        end: textarea.selectionEnd,
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey
+    });
+    if (!edit) return false;
     event.preventDefault();
-    insertMarkdown(textarea, event.key, pairs[event.key], "");
+    applyTextareaEdit(textarea, edit);
     return true;
 }
 
@@ -1039,7 +1072,8 @@ function handleMarkdownKeydown(event, textarea) {
             value,
             start: start + inserted.length,
             end: start + inserted.length,
-            key: event.key
+            key: event.key,
+            shiftKey: event.shiftKey
         });
         if (autocomplete) {
             event.preventDefault();
@@ -1168,6 +1202,12 @@ function createMarkdownEditor(textarea) {
     const headingTool = markdownIconTool(headingIcon, "제목", () => insertMarkdown(textarea, "# ", "", "제목"), "markdown-tool-heading");
     toolbar.append(withTooltip(headingTool, "제목 · Cmd+Option+1~6"));
 
+    const toggleIcon = svgIcon("markdown-tool-svg-toggle", [
+        {d: "M10 8L22 16L10 24Z", fill: "currentColor", stroke: "none"}
+    ]);
+    const toggleTool = markdownIconTool(toggleIcon, "토글", () => insertToggleBlock(textarea), "markdown-tool-toggle");
+    toolbar.append(withTooltip(toggleTool, "토글 블록 · /toggle"));
+
     const enterIcon = svgIcon("markdown-tool-svg-enter", [
         {d: "M24 7V21H8"},
         {d: "M13 16L8 21L13 26"}
@@ -1202,17 +1242,18 @@ function createMarkdownEditor(textarea) {
     [
         [listIcon, "목록", "- ", "", "목록 항목", "목록 · Cmd+Shift+8", ""],
         ["R", "굵게", "**", "**", "강조할 내용", "굵게 · Cmd+B", "markdown-tool-r markdown-tool-r-bold"],
-        ["R", "기울임", "*", "*", "기울일 내용", "기울임 · Cmd+I", "markdown-tool-r markdown-tool-r-italic"],
+        ["R", "기울임", "_", "_", "기울일 내용", "기울임 · Cmd+I", "markdown-tool-r markdown-tool-r-italic"],
         ["R", "취소선", "~~", "~~", "취소할 내용", "취소선 · Cmd+Shift+X", "markdown-tool-r markdown-tool-r-strike"],
+        ["R", "밑줄", "<u>", "</u>", "밑줄 내용", "밑줄 · Cmd+U", "markdown-tool-r markdown-tool-r-underline"],
         ["❞", "인용", "> ", "", "인용문", "인용문 · Cmd+Shift+9", "markdown-tool-quote"],
-        [linkIcon, "링크", "[", "](https://)", "링크 이름", "링크 · Cmd+K", ""],
+        [linkIcon, "링크", "", "", "", "링크 · Cmd+K", "", () => insertLink(textarea)],
         ["<>", "코드", "`", "`", "code", "인라인 코드 · Cmd+E", "markdown-tool-code"]
-    ].forEach(([icon, label, before, after, placeholder, tooltip, extraClass]) => {
-        const togglesInlineStyle = ["굵게", "기울임", "취소선", "코드"].includes(label);
+    ].forEach(([icon, label, before, after, placeholder, tooltip, extraClass, action]) => {
+        const togglesInlineStyle = ["굵게", "기울임", "취소선", "밑줄", "코드"].includes(label);
         const tool = markdownIconTool(
             icon,
             label,
-            () => insertMarkdown(textarea, before, after, placeholder, {toggle: togglesInlineStyle}),
+            action || (() => insertMarkdown(textarea, before, after, placeholder, {toggle: togglesInlineStyle})),
             extraClass
         );
         toolbar.append(withTooltip(
@@ -1225,7 +1266,7 @@ function createMarkdownEditor(textarea) {
         codeBlockTool,
         "코드 블록 · ```"
     ));
-    const tableTool = markdownIconTool(tableIcon, "표", () => insertMarkdownBlock(textarea, createMarkdownTable()));
+    const tableTool = markdownIconTool(tableIcon, "표", () => insertMarkdownTable(textarea));
     toolbar.append(withTooltip(
         tableTool,
         "표 삽입"
@@ -1295,7 +1336,6 @@ function createMarkdownEditor(textarea) {
     writing.append(element("span", "pane-label", "작성"), textarea);
     const preview = element("div", "markdown-pane markdown-preview");
     preview.append(element("span", "pane-label", "미리보기"));
-
     const tableTools = element("div", "markdown-table-tools");
     tableTools.addEventListener("mousedown", event => {
         if (event.target.closest("button")) {
@@ -1356,6 +1396,7 @@ function createMarkdownEditor(textarea) {
     });
     textarea.addEventListener("paste", event => handleImagePaste(event, textarea));
     updatePreview();
+    updateTableTools();
     workspace.append(writing, preview);
     editor.append(toolbar, workspace);
     return editor;

@@ -28,6 +28,28 @@ test("제목의 Markdown 서식은 목차 텍스트에서 제거한다", () => {
     ]);
 });
 
+test("#부터 #### 제목은 일반 제목으로 렌더링한다", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const source = "# 큰 제목\n본문\n#### 작은 제목\n내용";
+    const result = spawnSync(process.execPath, [fixture, source], {timeout: 300});
+    const html = result.stdout.toString();
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(html, /<h1 id="큰-제목">큰 제목<\/h1>/);
+    assert.match(html, /<h4 id="작은-제목">작은 제목<\/h4>/);
+    assert.doesNotMatch(html, /markdown-toggle-heading|markdown-heading-toggle/);
+});
+
+test("/toggle details block renders an explicit collapsible section", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const source = "<details>\n<summary># 토글 제목</summary>\n\n내용\n\n</details>";
+    const result = spawnSync(process.execPath, [fixture, source], {timeout: 300});
+    const html = result.stdout.toString();
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(html, /<details class="markdown-toggle"><summary class="markdown-toggle-summary markdown-toggle-summary-h1">토글 제목<\/summary><div class="markdown-body markdown-toggle-content"><p>내용<\/p><\/div><\/details>/);
+});
+
 test("RGB와 RRGGBB 형식만 정규화한다", () => {
     assert.equal(normalizeHexColor("#07f"), "#0077ff");
     assert.equal(normalizeHexColor("#071047"), "#071047");
@@ -44,6 +66,32 @@ test("취소선과 밑줄 인라인 마크다운을 렌더링한다", () => {
     assert.match(result.stdout.toString(), /<u>밑줄<\/u>/);
 });
 
+test("밑줄 기호로 작성한 기울임을 렌더링한다", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [fixture, "_기울임_"], {timeout: 300});
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(result.stdout.toString(), /<em>기울임<\/em>/);
+});
+
+test("중첩된 인라인 마크다운을 함께 렌더링한다", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [fixture, "**<u>_텍스트_</u>**"], {timeout: 300});
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(result.stdout.toString(), /<strong><u><em>텍스트<\/em><\/u><\/strong>/);
+});
+
+test("탭으로 들여쓴 인용문과 코드블록도 블록으로 렌더링한다", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const source = "    > 인용\n\n    ```java\n    int value = 1;\n    ```";
+    const result = spawnSync(process.execPath, [fixture, source], {timeout: 300});
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(result.stdout.toString(), /<blockquote class="markdown-indent-1"><p>인용<\/p><\/blockquote>/);
+    assert.match(result.stdout.toString(), /<pre class="markdown-indent-1"><code class="language-java">    int value = 1;<\/code><\/pre>/);
+});
+
 test("Markdown 표를 table 요소로 렌더링한다", () => {
     const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
     const source = "| 제목 | 설명 |\n| --- | --- |\n| 항목 | 내용 |";
@@ -53,6 +101,20 @@ test("Markdown 표를 table 요소로 렌더링한다", () => {
     assert.match(result.stdout.toString(), /<table>/);
     assert.match(result.stdout.toString(), /<thead><tr><th>제목<\/th><th>설명<\/th><\/tr><\/thead>/);
     assert.match(result.stdout.toString(), /<tbody><tr><td>항목<\/td><td>내용<\/td><\/tr><\/tbody>/);
+});
+
+test("Markdown 체크박스 목록을 input 요소로 렌더링한다", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const source = "- [ ] 할 일\n- [x] 끝난 일\n- [X] 대문자 완료\n-[] 빠른 입력\n    -[] 들여쓴 입력";
+    const result = spawnSync(process.execPath, [fixture, source], {timeout: 300});
+    const html = result.stdout.toString();
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled><\/input><span class="task-list-content">할 일<\/span><\/li>/);
+    assert.match(html, /<li class="task-list-item"><input type="checkbox" checked disabled><\/input><span class="task-list-content">끝난 일<\/span><\/li>/);
+    assert.match(html, /<li class="task-list-item"><input type="checkbox" checked disabled><\/input><span class="task-list-content">대문자 완료<\/span><\/li>/);
+    assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled><\/input><span class="task-list-content">빠른 입력<\/span><ul>/);
+    assert.match(html, /<li class="task-list-item"><input type="checkbox" disabled><\/input><span class="task-list-content">들여쓴 입력<\/span><\/li>/);
 });
 
 test("문단 안의 줄바꿈을 br 요소로 렌더링한다", () => {

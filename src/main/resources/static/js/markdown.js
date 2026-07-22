@@ -76,7 +76,7 @@ export function extractHeadings(source = "") {
 }
 
 function appendInlineMarkdown(parent, source) {
-    const pattern = /(<span style="color:\s*#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?">[\s\S]*?<\/span>|<u>[\s\S]*?<\/u>|<br\s*\/?>|!\[[^\]]*]\([^)]+\)|~~[\s\S]+?~~|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g;
+    const pattern = /(<span style="color:\s*#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?">[\s\S]*?<\/span>|<u>[\s\S]*?<\/u>|<br\s*\/?>|!\[[^\]]*]\([^)]+\)|~~[\s\S]+?~~|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\))/g;
     let cursor = 0;
 
     for (const match of source.matchAll(pattern)) {
@@ -118,11 +118,11 @@ function appendInlineMarkdown(parent, source) {
             parent.append(code);
         } else if (token.startsWith("**")) {
             const strong = document.createElement("strong");
-            strong.textContent = token.slice(2, -2);
+            appendInlineMarkdown(strong, token.slice(2, -2));
             parent.append(strong);
-        } else if (token.startsWith("*")) {
+        } else if (token.startsWith("*") || token.startsWith("_")) {
             const emphasis = document.createElement("em");
-            emphasis.textContent = token.slice(1, -1);
+            appendInlineMarkdown(emphasis, token.slice(1, -1));
             parent.append(emphasis);
         } else {
             const parts = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
@@ -159,6 +159,108 @@ function textBlock(tag, source) {
     const node = document.createElement(tag);
     appendInlineMarkdown(node, source);
     return node;
+}
+
+function headingTagLevel(node) {
+    const match = /^H([1-4])$/.exec(String(node?.tagName || "").toUpperCase());
+    return match ? Number(match[1]) : null;
+}
+
+function updateHeadingToggle(button, collapsed, title) {
+    if (!button) return;
+    button.textContent = collapsed ? "›" : "⌄";
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.setAttribute("aria-label", `${title} 섹션 ${collapsed ? "펼치기" : "접기"}`);
+}
+
+function setHeadingCollapsed(heading, collapsed) {
+    const level = headingTagLevel(heading);
+    if (!level) return;
+
+    const button = heading.querySelector?.(".markdown-heading-toggle");
+    const title = heading.dataset?.toggleTitle || "제목";
+    updateHeadingToggle(button, collapsed, title);
+    heading.classList?.toggle("is-collapsed", collapsed);
+
+    let sibling = heading.nextElementSibling;
+    while (sibling) {
+        const siblingLevel = headingTagLevel(sibling);
+        if (siblingLevel && siblingLevel <= level) break;
+        sibling.hidden = collapsed;
+        sibling.classList?.toggle("is-folded-by-heading", collapsed);
+        sibling = sibling.nextElementSibling;
+    }
+}
+
+function createToggleHeading(tag, source) {
+    const heading = document.createElement(tag);
+    const title = plainHeadingText(source) || "제목";
+    const button = document.createElement("button");
+    heading.className = "markdown-toggle-heading";
+    heading.dataset.toggleTitle = title;
+    button.className = "markdown-heading-toggle";
+    button.type = "button";
+    updateHeadingToggle(button, false, title);
+    button.addEventListener("click", () => {
+        setHeadingCollapsed(heading, button.getAttribute("aria-expanded") === "true");
+    });
+    heading.append(button);
+    appendInlineMarkdown(heading, source);
+    return heading;
+}
+
+function parseDetailsStart(line) {
+    return /^<details>\s*$/.test(line.trim());
+}
+
+function parseDetailsEnd(line) {
+    return /^<\/details>\s*$/.test(line.trim());
+}
+
+function parseDetailsSummary(line) {
+    const match = /^<summary>([\s\S]*)<\/summary>\s*$/.exec(line.trim());
+    return match ? match[1] : null;
+}
+
+function appendToggleSummary(summary, source) {
+    const heading = /^(#{1,4})\s+(.+)$/.exec(source.trim());
+    if (!heading) {
+        summary.className = "markdown-toggle-summary";
+        appendInlineMarkdown(summary, source);
+        return;
+    }
+
+    summary.className = `markdown-toggle-summary markdown-toggle-summary-h${heading[1].length}`;
+    appendInlineMarkdown(summary, heading[2]);
+}
+
+function renderDetailsBlock(lines, index) {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    const contentLines = [];
+    let cursor = index + 1;
+    const summarySource = parseDetailsSummary(lines[cursor] || "");
+
+    details.className = "markdown-toggle";
+    appendToggleSummary(summary, summarySource ?? "토글 제목");
+    details.append(summary);
+    if (summarySource !== null) {
+        cursor += 1;
+    }
+
+    while (cursor < lines.length && !parseDetailsEnd(lines[cursor])) {
+        contentLines.push(lines[cursor]);
+        cursor += 1;
+    }
+
+    const body = renderMarkdown(contentLines.join("\n"));
+    body.className = "markdown-body markdown-toggle-content";
+    details.append(body);
+
+    return {
+        node: details,
+        nextIndex: cursor < lines.length ? cursor + 1 : cursor
+    };
 }
 
 function parseMarkdownImage(source) {
@@ -266,18 +368,67 @@ function listIndent(source) {
 }
 
 function parseListLine(line) {
+    const taskItem = /^(\s*)(?:([-*+])|(\d+)\.)\s*\[([ xX]?)]\s*(.*)$/.exec(line);
+    if (taskItem) {
+        return {
+            indent: Math.floor(listIndent(taskItem[1]) / LIST_INDENT_WIDTH),
+            ordered: Boolean(taskItem[3]),
+            start: taskItem[3] ? Number(taskItem[3]) : null,
+            content: taskItem[5],
+            checked: taskItem[4].toLowerCase() === "x"
+        };
+    }
+
     const item = /^(\s*)(?:([-*+])|(\d+)\.)\s+(.+)$/.exec(line);
     if (!item) return null;
     return {
         indent: Math.floor(listIndent(item[1]) / LIST_INDENT_WIDTH),
         ordered: Boolean(item[3]),
         start: item[3] ? Number(item[3]) : null,
-        content: item[4]
+        content: item[4],
+        checked: null
     };
 }
 
 function isEmptyContinuationMarker(line) {
     return /^\s*(?:[-*+]|\d+\.|>)\s*$/.test(line);
+}
+
+function parseCodeFence(line) {
+    return /^\s*```([\w#+.-]*)\s*$/.exec(line);
+}
+
+function blockIndentLevel(line) {
+    const indent = /^(\s*)/.exec(line)?.[1] || "";
+    return Math.floor(listIndent(indent) / LIST_INDENT_WIDTH);
+}
+
+function blockIndentClass(line) {
+    const level = Math.min(blockIndentLevel(line), 6);
+    return level > 0 ? `markdown-indent-${level}` : "";
+}
+
+function parseBlockquoteLine(line) {
+    const quote = /^\s*>\s?(.*)$/.exec(line);
+    return quote ? quote[1] : null;
+}
+
+function createListItem(item) {
+    if (item.checked === null) {
+        return textBlock("li", item.content);
+    }
+
+    const listItem = document.createElement("li");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = item.checked;
+    checkbox.disabled = true;
+    const content = document.createElement("span");
+    content.className = "task-list-content";
+    listItem.className = "task-list-item";
+    appendInlineMarkdown(content, item.content);
+    listItem.append(checkbox, content);
+    return listItem;
 }
 
 function renderList(lines, index, baseIndent = null) {
@@ -305,7 +456,7 @@ function renderList(lines, index, baseIndent = null) {
 
         if (item.ordered !== ordered) break;
 
-        lastListItem = textBlock("li", item.content);
+        lastListItem = createListItem(item);
         list.append(lastListItem);
         index += 1;
     }
@@ -328,16 +479,28 @@ export function renderMarkdown(source = "") {
             continue;
         }
 
-        if (line.startsWith("```")) {
-            const language = normalizeCodeLanguage(line.slice(3));
+        if (parseDetailsStart(line)) {
+            const {node, nextIndex} = renderDetailsBlock(lines, index);
+            container.append(node);
+            index = nextIndex;
+            continue;
+        }
+
+        const codeFence = parseCodeFence(line);
+        if (codeFence) {
+            const language = normalizeCodeLanguage(codeFence[1]);
+            const indentClass = blockIndentClass(line);
             const codeLines = [];
             index += 1;
-            while (index < lines.length && !lines[index].startsWith("```")) {
+            while (index < lines.length && !parseCodeFence(lines[index])) {
                 codeLines.push(lines[index]);
                 index += 1;
             }
             const pre = document.createElement("pre");
             const code = document.createElement("code");
+            if (indentClass) {
+                pre.className = indentClass;
+            }
             if (language) {
                 pre.dataset.language = language;
                 code.dataset.language = language;
@@ -352,8 +515,9 @@ export function renderMarkdown(source = "") {
 
         const heading = /^(#{1,6})\s+(.+)$/.exec(line);
         if (heading) {
-            const node = textBlock(`h${heading[1].length}`, heading[2]);
-            if (heading[1].length <= 4) {
+            const level = heading[1].length;
+            const node = textBlock(`h${level}`, heading[2]);
+            if (level <= 4) {
                 node.id = headings[headingIndex].id;
                 headingIndex += 1;
             }
@@ -382,11 +546,16 @@ export function renderMarkdown(source = "") {
             continue;
         }
 
-        if (line.startsWith("> ")) {
+        if (parseBlockquoteLine(line) !== null) {
             const quote = document.createElement("blockquote");
+            const indentClass = blockIndentClass(line);
+            if (indentClass) {
+                quote.className = indentClass;
+            }
             let hasContent = false;
-            while (index < lines.length && lines[index].startsWith("> ")) {
-                const content = lines[index].slice(2);
+            while (index < lines.length) {
+                const content = parseBlockquoteLine(lines[index]);
+                if (content === null) break;
                 if (content.trim()) {
                     quote.append(textBlock("p", content));
                     hasContent = true;
@@ -414,7 +583,7 @@ export function renderMarkdown(source = "") {
 
         const paragraph = [];
         while (index < lines.length && lines[index].trim()) {
-            const startsNewBlock = /^(#{1,6})\s+|^```|^>\s|^\s*(?:[-*+]\s+|\d+\.\s+)/.test(lines[index])
+            const startsNewBlock = /^(#{1,6})\s+|^\s*```|^\s*>\s?|^\s*(?:[-*+]\s+|\d+\.\s+)/.test(lines[index])
                     || startsTable(lines, index);
             if (paragraph.length && startsNewBlock) break;
             paragraph.push(lines[index]);

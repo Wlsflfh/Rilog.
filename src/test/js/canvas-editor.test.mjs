@@ -11,14 +11,16 @@ import {
 test("createEmptyCanvasDocument returns versioned empty canvas", () => {
     assert.deepEqual(createEmptyCanvasDocument(), {
         version: 1,
-        nodes: []
+        nodes: [],
+        edges: []
     });
 });
 
 test("parseCanvasDocument falls back to empty document for invalid JSON", () => {
     assert.deepEqual(parseCanvasDocument("{"), {
         version: 1,
-        nodes: []
+        nodes: [],
+        edges: []
     });
 });
 
@@ -48,7 +50,8 @@ test("serializeCanvasDocument returns stable JSON shape", () => {
         version: 1,
         nodes: [
             {id: "a", type: "text", x: 10, y: 20, width: 300, height: 160, content: "메모"}
-        ]
+        ],
+        edges: []
     });
 });
 

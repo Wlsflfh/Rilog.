@@ -7,10 +7,18 @@ class FakeNode {
         this.children = [];
         this.dataset = {};
         this.style = {};
+        this.attributes = {};
     }
 
     append(...children) {
         this.children.push(...children);
+    }
+
+    setAttribute(name, value) {
+        this.attributes[name] = String(value);
+    }
+
+    addEventListener() {
     }
 }
 
@@ -29,9 +37,14 @@ function serialize(node) {
     const children = node.children.map(serialize).join("");
     const attributes = [
         node.className ? `class="${node.className}"` : "",
+        node.id ? `id="${node.id}"` : "",
         node.src ? `src="${node.src}"` : "",
         node.alt ? `alt="${node.alt}"` : "",
-        node.href ? `href="${node.href}"` : ""
+        node.href ? `href="${node.href}"` : "",
+        node.type ? `type="${node.type}"` : "",
+        node.checked ? "checked" : "",
+        node.disabled ? "disabled" : "",
+        ...Object.entries(node.attributes || {}).map(([name, value]) => `${name}="${value}"`)
     ].filter(Boolean).join(" ");
     return `<${node.tagName}${attributes ? ` ${attributes}` : ""}>${node.textContent || ""}${children}</${node.tagName}>`;
 }
