@@ -413,6 +413,11 @@ function parseBlockquoteLine(line) {
     return quote ? quote[1] : null;
 }
 
+function stripFenceIndent(line, indent) {
+    if (!indent) return line;
+    return line.startsWith(indent) ? line.slice(indent.length) : line;
+}
+
 function createListItem(item) {
     if (item.checked === null) {
         return textBlock("li", item.content);
@@ -490,6 +495,7 @@ export function renderMarkdown(source = "") {
         if (codeFence) {
             const language = normalizeCodeLanguage(codeFence[1]);
             const indentClass = blockIndentClass(line);
+            const fenceIndent = /^(\s*)/.exec(line)?.[1] || "";
             const codeLines = [];
             index += 1;
             while (index < lines.length && !parseCodeFence(lines[index])) {
@@ -506,7 +512,7 @@ export function renderMarkdown(source = "") {
                 code.dataset.language = language;
                 code.className = `language-${language}`;
             }
-            code.textContent = codeLines.join("\n");
+            code.textContent = codeLines.map(codeLine => stripFenceIndent(codeLine, fenceIndent)).join("\n");
             pre.append(code);
             container.append(pre);
             index += 1;
@@ -552,17 +558,20 @@ export function renderMarkdown(source = "") {
             if (indentClass) {
                 quote.className = indentClass;
             }
+            const quoteLines = [];
             let hasContent = false;
             while (index < lines.length) {
                 const content = parseBlockquoteLine(lines[index]);
                 if (content === null) break;
+                quoteLines.push(content);
                 if (content.trim()) {
-                    quote.append(textBlock("p", content));
                     hasContent = true;
                 }
                 index += 1;
             }
             if (hasContent) {
+                const quoteContent = renderMarkdown(quoteLines.join("\n"));
+                quote.append(...Array.from(quoteContent.childNodes || quoteContent.children || []));
                 container.append(quote);
             }
             continue;

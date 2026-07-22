@@ -368,7 +368,7 @@ test("Tab indents blockquote and fenced code block lines", () => {
         start: 0,
         end: 14,
         outdent: false
-    }).value, "    > quote\n    > next");
+    }).value, ">     quote\n>     next");
 
     assert.deepEqual(indentSelection({
         value: "```\ncode\n```",
@@ -414,6 +414,20 @@ test("Shift+Enter keeps the cursor inside list and blockquote content", () => {
         start: 15,
         end: 15
     });
+
+    const nestedQuoteList = ">     - 하위";
+    const nestedQuoteListResult = `${nestedQuoteList}\n>       `;
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: nestedQuoteList,
+        start: nestedQuoteList.length,
+        end: nestedQuoteList.length,
+        key: "Enter",
+        shiftKey: true
+    }), {
+        value: nestedQuoteListResult,
+        start: nestedQuoteListResult.length,
+        end: nestedQuoteListResult.length
+    });
 });
 
 test("Enter keeps indentation around fenced code blocks", () => {
@@ -437,6 +451,67 @@ test("Enter keeps indentation around fenced code blocks", () => {
         value: "```\n    code\n    ",
         start: 17,
         end: 17
+    });
+
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "```java\n```",
+        start: 7,
+        end: 7,
+        key: "Enter"
+    }), {
+        value: "```java\n\n```",
+        start: 8,
+        end: 8
+    });
+
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "    ```java\n    ```",
+        start: 11,
+        end: 11,
+        key: "Enter"
+    }), {
+        value: "    ```java\n    \n    ```",
+        start: 16,
+        end: 16
+    });
+
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "``````",
+        start: 3,
+        end: 3,
+        key: "Enter"
+    }), {
+        value: "```\n```",
+        start: 4,
+        end: 4
+    });
+
+    const closedBlock = "```\ncode\n```";
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: closedBlock,
+        start: closedBlock.length,
+        end: closedBlock.length,
+        key: "Enter"
+    }), {
+        value: `${closedBlock}\n`,
+        start: closedBlock.length + 1,
+        end: closedBlock.length + 1
+    });
+});
+
+test("Enter continues list markers inside blockquotes", () => {
+    const source = ">     - 하위";
+    const nextLine = `${source}\n>     - `;
+
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: source,
+        start: source.length,
+        end: source.length,
+        key: "Enter"
+    }), {
+        value: nextLine,
+        start: nextLine.length,
+        end: nextLine.length
     });
 });
 

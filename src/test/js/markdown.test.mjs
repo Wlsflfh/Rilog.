@@ -89,7 +89,16 @@ test("탭으로 들여쓴 인용문과 코드블록도 블록으로 렌더링한
 
     assert.equal(result.status, 0, `${result.error || result.stderr}`);
     assert.match(result.stdout.toString(), /<blockquote class="markdown-indent-1"><p>인용<\/p><\/blockquote>/);
-    assert.match(result.stdout.toString(), /<pre class="markdown-indent-1"><code class="language-java">    int value = 1;<\/code><\/pre>/);
+    assert.match(result.stdout.toString(), /<pre class="markdown-indent-1"><code class="language-java">int value = 1;<\/code><\/pre>/);
+});
+
+test("인용문 안의 목록을 중첩 블록으로 렌더링한다", () => {
+    const fixture = fileURLToPath(new URL("./markdown-render-fixture.mjs", import.meta.url));
+    const source = "> 인용\n>     - 하위\n>     - 둘째";
+    const result = spawnSync(process.execPath, [fixture, source], {timeout: 300});
+
+    assert.equal(result.status, 0, `${result.error || result.stderr}`);
+    assert.match(result.stdout.toString(), /<blockquote><p>인용<\/p><ul><li>하위<\/li><li>둘째<\/li><\/ul><\/blockquote>/);
 });
 
 test("Markdown 표를 table 요소로 렌더링한다", () => {

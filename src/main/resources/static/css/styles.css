@@ -1153,10 +1153,11 @@ body:has(.editor-page) .app-header {
 }
 
 .editor-title-input {
-    flex: 0 1 auto;
-    width: 8.8em;
-    max-width: min(100%, 850px);
-    field-sizing: content;
+    flex: 0 1 min(100%, 19.5em);
+    width: min(100%, 19.5em);
+    max-width: min(100%, 1040px);
+    min-width: 0;
+    field-sizing: fixed;
     min-height: 72px;
     padding: 0;
     color: var(--text);
@@ -1167,6 +1168,11 @@ body:has(.editor-page) .app-header {
     font-weight: 900;
     line-height: 1.12;
     letter-spacing: -.055em;
+}
+
+.editor-title-input:placeholder-shown {
+    flex-basis: min(100%, 8.2em);
+    width: min(100%, 8.2em);
 }
 
 .editor-title-input.field-invalid {
@@ -1362,6 +1368,109 @@ body:has(.editor-page) .app-header {
     font-size: 13px;
     font-weight: 1000;
     font-style: italic;
+}
+
+.markdown-heading-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.markdown-heading-picker.is-open .markdown-tool[data-tooltip]::after {
+    opacity: 0;
+}
+
+.markdown-heading-menu {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 9px);
+    left: 0;
+    display: none;
+    width: 235px;
+    padding: 7px;
+    background: color-mix(in srgb, var(--surface-raised) 96%, var(--canvas));
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    box-shadow: 0 18px 48px rgba(7, 16, 71, .18);
+}
+
+.markdown-heading-picker.is-open .markdown-heading-menu {
+    display: grid;
+    gap: 2px;
+}
+
+.markdown-heading-option {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.markdown-heading-option:hover,
+.markdown-heading-option:focus-visible {
+    background: var(--navy-100);
+    outline: none;
+}
+
+.markdown-heading-option-mark {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 24px;
+    color: var(--text-secondary);
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1;
+}
+
+.markdown-heading-option-main {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 28px;
+    font-weight: 1000;
+    letter-spacing: -.08em;
+}
+
+.markdown-heading-option-index {
+    position: absolute;
+    right: 4px;
+    bottom: 1px;
+    font-size: 12px;
+    font-weight: 1000;
+    font-style: italic;
+}
+
+.markdown-heading-option-label {
+    font-size: 15px;
+    font-weight: 850;
+}
+
+.markdown-heading-option-hash {
+    color: var(--text-tertiary);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: -.06em;
+}
+
+:root[data-theme="dark"] .markdown-heading-menu {
+    background: #222222;
+    border-color: rgba(255, 255, 255, .08);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .34);
+}
+
+:root[data-theme="dark"] .markdown-heading-option:hover,
+:root[data-theme="dark"] .markdown-heading-option:focus-visible {
+    background: rgba(255, 255, 255, .08);
 }
 
 .markdown-tool-r .markdown-tool-glyph {

@@ -111,7 +111,7 @@ function nextListNumber(marker) {
 }
 
 function taskListLine(line) {
-    return /^(\s*)((?:[-*+])|(?:\d+\.))\s*\[([ xX]?)]\s*(.*)$/.exec(line);
+    return /^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s*\[([ xX]?)]\s*(.*)$/.exec(line);
 }
 
 function taskListHasContent(line) {
@@ -120,10 +120,34 @@ function taskListHasContent(line) {
 }
 
 function nextTaskListMarker(taskList) {
-    const listMarker = /^\d+\.$/.test(taskList[2])
-        ? nextListNumber(`${taskList[1]}${taskList[2]} `)
-        : `${taskList[1]}${taskList[2]} `;
+    const listMarker = nextListMarker(taskList[1], taskList[2]);
     return `${listMarker}[ ] `;
+}
+
+function listLine(line) {
+    return /^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s+(.+)$/.exec(line);
+}
+
+function nextListMarker(prefix, marker) {
+    if (/^\d+\.$/.test(marker)) {
+        return `${prefix}${Number(marker.slice(0, -1)) + 1}. `;
+    }
+    return `${prefix}${marker} `;
+}
+
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasClosingFenceAfterCursor(value, position, indent, lineEnd = "") {
+    if (lineEnd.startsWith("```")) return true;
+
+    const closingFence = new RegExp(`^${escapeRegExp(indent)}\`\`\``);
+    return value
+        .slice(position)
+        .split("\n")
+        .slice(1)
+        .some(tailLine => closingFence.test(tailLine));
 }
 
 function isInsideFencedCodeBlock(value, lineStart) {
@@ -179,12 +203,6 @@ export function applyMarkdownAutocomplete(state) {
     const key = state.key || " ";
 
     if (key === "Enter" && state.shiftKey) {
-        const quoteContent = /^(\s*>\s+).+/.exec(line);
-        if (quoteContent) {
-            const replacement = `\n${quoteContent[1]}`;
-            return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
-        }
-
         const taskListContent = taskListLine(line);
         if (taskListContent && taskListHasContent(line)) {
             const markerWidth = `${taskListContent[2]} [ ] `.length;
@@ -192,10 +210,16 @@ export function applyMarkdownAutocomplete(state) {
             return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
         }
 
-        const listContent = /^(\s*)([-*+]|\d+\.)\s+.+/.exec(line);
+        const listContent = listLine(line);
         if (listContent) {
             const markerWidth = `${listContent[2]} `.length;
             const replacement = `\n${listContent[1]}${" ".repeat(markerWidth)}`;
+            return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
+        }
+
+        const quoteContent = /^(\s*>\s+).+/.exec(line);
+        if (quoteContent) {
+            const replacement = `\n${quoteContent[1]}`;
             return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
         }
 
@@ -206,6 +230,14 @@ export function applyMarkdownAutocomplete(state) {
         const openingFence = /^(\s*)```[\w#+.-]*$/.exec(line);
         if (openingFence) {
             const indent = openingFence[1];
+            if (isInsideFencedCodeBlock(state.value, bounds.start)) {
+                const replacement = `\n${indent}`;
+                return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
+            }
+            if (hasClosingFenceAfterCursor(state.value, state.start, indent, lineEnd)) {
+                const replacement = `\n${indent}`;
+                return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
+            }
             const replacement = `${line}\n${indent}\n${indent}\`\`\`\n`;
             return replaceRange(state.value, bounds.start, state.start, replacement, bounds.start + line.length + 1 + indent.length);
         }
@@ -225,20 +257,14 @@ export function applyMarkdownAutocomplete(state) {
             return replaceRange(state.value, bounds.start, state.start, "", bounds.start);
         }
 
-        const emptyTaskList = /^(\s*)([-*+]|\d+\.)\s*\[[ xX]?]\s*$/.exec(line);
+        const emptyTaskList = /^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s*\[[ xX]?]\s*$/.exec(line);
         if (emptyTaskList) {
             return replaceRange(state.value, bounds.start, state.start, emptyTaskList[1], bounds.start + emptyTaskList[1].length);
         }
 
-        const emptyList = /^(\s*)([-*+]|\d+\.)\s*$/.exec(line);
+        const emptyList = /^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s*$/.exec(line);
         if (emptyList) {
             return replaceRange(state.value, bounds.start, state.start, emptyList[1], bounds.start + emptyList[1].length);
-        }
-
-        const quoteContent = /^(\s*>\s+).+/.exec(line);
-        if (quoteContent) {
-            const replacement = `\n${quoteContent[1]}`;
-            return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
         }
 
         const taskListContent = taskListLine(line);
@@ -248,10 +274,16 @@ export function applyMarkdownAutocomplete(state) {
             return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
         }
 
-        const listContent = /^(\s*(?:[-*+]|\d+\.)\s+).+/.exec(line);
+        const listContent = listLine(line);
         if (listContent) {
-            const marker = nextListNumber(listContent[1]);
+            const marker = nextListMarker(listContent[1], listContent[2]);
             const replacement = `\n${marker}`;
+            return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
+        }
+
+        const quoteContent = /^(\s*>\s+).+/.exec(line);
+        if (quoteContent) {
+            const replacement = `\n${quoteContent[1]}`;
             return replaceRange(state.value, state.start, state.start, replacement, state.start + replacement.length);
         }
     }
@@ -274,7 +306,7 @@ export function applyMarkdownAutocomplete(state) {
         );
     }
 
-    if (/^(\s*)([-*+]|\d+\.)\s+\[\s$/.test(line) && lineEnd.startsWith("]")) {
+    if (/^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s+\[\s$/.test(line) && lineEnd.startsWith("]")) {
         const replacement = `${line}] `;
         return replaceRange(state.value, bounds.start, state.start + 1, replacement, bounds.start + replacement.length);
     }
@@ -344,7 +376,18 @@ export function indentSelection({value, start, end, outdent = false}) {
     const block = value.slice(selectionStartLine, selectionEndLine);
     const lines = block.split("\n");
     const changed = lines.map(line => {
-        if (!outdent) return line ? `${INDENT}${line}` : line;
+        const quoteLine = /^((?:\s*>\s*)+)(.*)$/.exec(line);
+        if (!outdent) {
+            if (!line) return line;
+            return quoteLine ? `${quoteLine[1]}${INDENT}${quoteLine[2]}` : `${INDENT}${line}`;
+        }
+        if (quoteLine) {
+            const content = quoteLine[2];
+            if (content.startsWith(INDENT)) return `${quoteLine[1]}${content.slice(INDENT.length)}`;
+            if (content.startsWith("\t")) return `${quoteLine[1]}${content.slice(1)}`;
+            const quotePartialIndent = /^ {1,3}/.exec(content);
+            return quotePartialIndent ? `${quoteLine[1]}${content.slice(quotePartialIndent[0].length)}` : line;
+        }
         if (line.startsWith(INDENT)) return line.slice(INDENT.length);
         if (line.startsWith("\t")) return line.slice(1);
         const partialIndent = /^ {1,3}/.exec(line);

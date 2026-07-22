@@ -1199,8 +1199,82 @@ function createMarkdownEditor(textarea) {
         element("span", "markdown-heading-main", "H"),
         element("span", "markdown-heading-index", "n")
     );
-    const headingTool = markdownIconTool(headingIcon, "제목", () => insertMarkdown(textarea, "# ", "", "제목"), "markdown-tool-heading");
-    toolbar.append(withTooltip(headingTool, "제목 · Cmd+Option+1~6"));
+    const headingPicker = element("div", "markdown-heading-picker");
+    const headingMenu = element("div", "markdown-heading-menu");
+    const closeHeadingMenu = () => {
+        headingPicker.classList.remove("is-open");
+        headingTool.setAttribute("aria-expanded", "false");
+    };
+    const openHeadingMenu = () => {
+        headingPicker.classList.add("is-open");
+        headingTool.setAttribute("aria-expanded", "true");
+    };
+    const headingTool = markdownIconTool(headingIcon, "제목 선택", () => {
+        if (headingPicker.classList.contains("is-open")) {
+            closeHeadingMenu();
+            return;
+        }
+        openHeadingMenu();
+    }, "markdown-tool-heading");
+    headingTool.setAttribute("aria-haspopup", "menu");
+    headingTool.setAttribute("aria-expanded", "false");
+    headingMenu.setAttribute("role", "menu");
+    Array.from({length: 6}, (_, index) => index + 1).forEach(level => {
+        const prefix = "#".repeat(level);
+        const optionMark = element("span", "markdown-heading-option-mark");
+        optionMark.append(
+            element("span", "markdown-heading-option-main", "H"),
+            element("span", "markdown-heading-option-index", String(level))
+        );
+        const option = button("", "markdown-heading-option", () => {
+            insertMarkdown(textarea, `${prefix} `, "", `제목${level}`);
+            closeHeadingMenu();
+        });
+        option.setAttribute("role", "menuitem");
+        option.append(
+            optionMark,
+            element("span", "markdown-heading-option-label", `제목${level}`),
+            element("span", "markdown-heading-option-hash", prefix)
+        );
+        headingMenu.append(option);
+    });
+    headingMenu.addEventListener("keydown", event => {
+        const options = Array.from(headingMenu.querySelectorAll(".markdown-heading-option"));
+        const currentIndex = options.indexOf(document.activeElement);
+        if (event.key === "Escape") {
+            event.preventDefault();
+            closeHeadingMenu();
+            headingTool.focus();
+        }
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            const nextIndex = (currentIndex + direction + options.length) % options.length;
+            options[nextIndex].focus();
+        }
+    });
+    headingTool.addEventListener("keydown", event => {
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            openHeadingMenu();
+            headingMenu.querySelector(".markdown-heading-option")?.focus();
+        }
+        if (event.key === "Escape") {
+            closeHeadingMenu();
+        }
+    });
+    const closeHeadingMenuOnOutside = event => {
+        if (!headingPicker.isConnected) {
+            document.removeEventListener("mousedown", closeHeadingMenuOnOutside);
+            return;
+        }
+        if (!headingPicker.contains(event.target)) {
+            closeHeadingMenu();
+        }
+    };
+    document.addEventListener("mousedown", closeHeadingMenuOnOutside);
+    headingPicker.append(withTooltip(headingTool, "제목 선택 · Cmd+Option+1~6"), headingMenu);
+    toolbar.append(headingPicker);
 
     const toggleIcon = svgIcon("markdown-tool-svg-toggle", [
         {d: "M10 8L22 16L10 24Z", fill: "currentColor", stroke: "none"}
@@ -1575,9 +1649,12 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         const cancel = element("a", "editor-exit", "← 나가기");
         cancel.href = post ? `#/posts/${post.id}` : "#/";
         const saveDraftButton = button("임시저장", "button button-secondary", () => {
+            const currentContent = contentType === POST_CONTENT_TYPES.CANVAS
+                    ? canvasContent
+                    : content.value;
             saveDraft(state.user.id, contentType, {
                 title: title.value,
-                content: contentType === POST_CONTENT_TYPES.CANVAS ? canvasContent : content.value,
+                content: currentContent,
                 thumbnailUrl: thumbnail.value,
                 postStatus: form.elements.postStatus.value
             });
@@ -1608,7 +1685,9 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         );
         form.addEventListener("submit", async event => {
             event.preventDefault();
-            const body = contentType === POST_CONTENT_TYPES.CANVAS ? canvasContent : content.value.trim();
+            const body = contentType === POST_CONTENT_TYPES.CANVAS
+                    ? canvasContent
+                    : content.value.trim();
             const titleText = title.value.trim();
             setFieldError(title, titleError);
             setFieldError(content, contentError);
