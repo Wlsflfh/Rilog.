@@ -38,6 +38,7 @@ out/
 
 # Local visual brainstorming artifacts
 .superpowers/
+.worktrees/
 
 # Runtime uploaded files
 src/main/resources/static/uploads/
