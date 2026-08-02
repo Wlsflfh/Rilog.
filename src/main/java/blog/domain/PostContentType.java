@@ -2,5 +2,6 @@ package blog.domain;
 
 public enum PostContentType {
     MARKDOWN,
-    CANVAS
+    CANVAS,
+    RICH_TEXT
 }

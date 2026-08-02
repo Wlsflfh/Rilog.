@@ -2,6 +2,7 @@ package blog.service;
 
 import blog.controller.dto.PostRequest;
 import blog.domain.Post;
+import blog.domain.PostCategory;
 import blog.domain.PostContentType;
 import blog.domain.PostStatus;
 import blog.domain.User;
@@ -34,7 +35,7 @@ class PostCommandServiceTest {
         given(userService.getUser(1L)).willReturn(user);
         given(slugGenerator.generate(1L, "제목")).willReturn("title");
         given(postRepository.save(any(Post.class))).willReturn(saved);
-        PostRequest request = new PostRequest("제목", "본문", null, null, PostStatus.PUBLIC);
+        PostRequest request = new PostRequest("제목", "본문", null, null, PostContentType.MARKDOWN, PostCategory.IT, PostStatus.PUBLIC);
 
         // when
         postCommandService.create(1L, request);
@@ -53,7 +54,7 @@ class PostCommandServiceTest {
         given(userService.getUser(1L)).willReturn(user);
         given(slugGenerator.generate(1L, "제목")).willReturn("title");
         given(postRepository.save(any(Post.class))).willReturn(saved);
-        PostRequest request = new PostRequest("제목", "{\"version\":1,\"nodes\":[]}", null, null, PostContentType.CANVAS, PostStatus.PUBLIC);
+        PostRequest request = new PostRequest("제목", "{\"version\":1,\"nodes\":[]}", null, null, PostContentType.CANVAS, PostCategory.IT, PostStatus.PUBLIC);
 
         // when
         postCommandService.create(1L, request);
@@ -62,5 +63,55 @@ class PostCommandServiceTest {
         ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
         verify(postRepository).save(captor.capture());
         assertThat(captor.getValue().getContentType()).isEqualTo(PostContentType.CANVAS);
+    }
+
+    @Test
+    @DisplayName("Rich Text 글을 작성하면 글 타입을 함께 저장한다.")
+    void createRichTextPost() {
+        // given
+        User user = new User("방문자", "visitor@example.com", null);
+        Post saved = mock(Post.class);
+        given(saved.getId()).willReturn(1L);
+        given(userService.getUser(1L)).willReturn(user);
+        given(slugGenerator.generate(1L, "제목")).willReturn("title");
+        given(postRepository.save(any(Post.class))).willReturn(saved);
+        PostRequest request = new PostRequest(
+                "제목",
+                "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"본문\"}]}]}",
+                null,
+                null,
+                PostContentType.RICH_TEXT,
+                PostCategory.IT,
+                PostStatus.PUBLIC
+        );
+
+        // when
+        postCommandService.create(1L, request);
+
+        // then
+        ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
+        verify(postRepository).save(captor.capture());
+        assertThat(captor.getValue().getContentType()).isEqualTo(PostContentType.RICH_TEXT);
+    }
+
+    @Test
+    @DisplayName("게시글을 작성하면 선택한 카테고리를 함께 저장한다.")
+    void createPostCategory() {
+        // given
+        User user = new User("방문자", "visitor@example.com", null);
+        Post saved = mock(Post.class);
+        given(saved.getId()).willReturn(1L);
+        given(userService.getUser(1L)).willReturn(user);
+        given(slugGenerator.generate(1L, "제목")).willReturn("title");
+        given(postRepository.save(any(Post.class))).willReturn(saved);
+        PostRequest request = new PostRequest("제목", "본문", null, null, PostContentType.MARKDOWN, PostCategory.EXERCISE, PostStatus.PUBLIC);
+
+        // when
+        postCommandService.create(1L, request);
+
+        // then
+        ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
+        verify(postRepository).save(captor.capture());
+        assertThat(captor.getValue().getCategory()).isEqualTo(PostCategory.EXERCISE);
     }
 }
