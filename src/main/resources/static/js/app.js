@@ -1,5 +1,6 @@
 import {
     addAnnotationComment,
+    createAnnotation,
     createComment,
     createPost,
     deleteComment,
@@ -1589,15 +1590,44 @@ function createCanvasField(initialValue, onChange) {
     return field;
 }
 
-function createRichTextField(initialValue, onChange, error = null) {
+function createRichTextField(initialValue, onChange, error = null, postId = null) {
     const field = element("div", "form-field");
+    const toolbar = element("div", "rich-text-toolbar");
     const mount = element("div", "rich-text-editor-mount");
     const editor = createRichTextEditor({
         mount,
         initialContent: initialValue,
         onChange
     });
-    field.append(element("span", "field-label", "본문"), mount);
+    const annotationButton = button("문장 댓글", "markdown-tool markdown-tool-word", async () => {
+        if (!postId) {
+            showToast("글을 발행한 뒤 문장 댓글을 붙일 수 있어요.");
+            return;
+        }
+        const quotedText = editor.getSelectedText().trim();
+        if (!quotedText) {
+            showToast("댓글을 붙일 문장을 선택해주세요.");
+            return;
+        }
+        const content = window.prompt("문장 댓글");
+        if (!content?.trim()) return;
+        annotationButton.disabled = true;
+        try {
+            const annotation = await createAnnotation(postId, {
+                quotedText,
+                content: content.trim()
+            });
+            editor.addAnnotationMark(annotation.id);
+            onChange(editor.getContent());
+            showToast("문장 댓글을 붙였어요.");
+        } catch (error) {
+            showToast(error.message);
+        } finally {
+            annotationButton.disabled = false;
+        }
+    });
+    toolbar.append(annotationButton);
+    field.append(element("span", "field-label", "본문"), toolbar, mount);
     if (error) field.append(error);
     return {field, editor};
 }
@@ -1814,7 +1844,7 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
                 const richText = createRichTextField(richTextContent, value => {
                     richTextContent = value;
                     setFieldError(content, contentError);
-                }, contentError);
+                }, contentError, post?.id || null);
                 richTextEditor = richText.editor;
                 return richText.field;
             }

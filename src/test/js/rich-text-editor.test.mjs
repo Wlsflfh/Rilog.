@@ -25,3 +25,23 @@ test("createRichTextEditor serializes ProseMirror doc JSON", () => {
     assert.equal(content.type, "doc");
     editor.destroy();
 });
+
+test("addAnnotationMark stores annotation mark in serialized document", () => {
+    const mount = document.createElement("div");
+    const editor = createRichTextEditor({
+        mount,
+        initialContent: JSON.stringify({
+            type: "doc",
+            content: [{type: "paragraph", content: [{type: "text", text: "댓글 문장"}]}]
+        }),
+        onChange: () => {}
+    });
+
+    editor.selectText(1, 5);
+    editor.addAnnotationMark(7);
+
+    const content = JSON.stringify(JSON.parse(editor.getContent()));
+    assert.match(content, /"annotation"/);
+    assert.match(content, /"7"/);
+    editor.destroy();
+});

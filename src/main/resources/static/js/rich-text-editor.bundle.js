@@ -12712,6 +12712,20 @@ function createRichTextEditor({ mount, initialContent, onChange = () => {
     getContent() {
       return JSON.stringify(view.state.doc.toJSON());
     },
+    getSelectedText() {
+      const { from: from2, to } = view.state.selection;
+      return view.state.doc.textBetween(from2, to, " ");
+    },
+    selectText(from2, to) {
+      const selection = TextSelection.create(view.state.doc, from2, to);
+      view.dispatch(view.state.tr.setSelection(selection));
+    },
+    addAnnotationMark(id) {
+      const { from: from2, to, empty: empty2 } = view.state.selection;
+      if (empty2) return;
+      const mark = richTextSchema.marks.annotation.create({ id: String(id) });
+      view.dispatch(view.state.tr.addMark(from2, to, mark));
+    },
     destroy() {
       view.destroy();
     }
