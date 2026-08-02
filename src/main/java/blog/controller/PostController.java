@@ -10,6 +10,7 @@ import blog.controller.dto.LikeUserResponse;
 import blog.controller.dto.PostRequest;
 import blog.controller.dto.PostResponse;
 import blog.domain.PostAnnotation;
+import blog.domain.PostAnnotationComment;
 import blog.domain.PostCategory;
 import blog.service.PostAnnotationService;
 import blog.service.PostCommentService;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/posts")
@@ -169,10 +171,15 @@ public class PostController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         Long viewerId = userIdOrNull(user);
-        List<AnnotationResponse> responses = postAnnotationService.findByPost(postId, viewerId).stream()
+        List<PostAnnotation> annotations = postAnnotationService.findByPost(postId, viewerId);
+        Map<Long, List<PostAnnotationComment>> commentsByAnnotationId =
+                postAnnotationService.findCommentsByAnnotationIds(annotations.stream()
+                        .map(PostAnnotation::getId)
+                        .toList());
+        List<AnnotationResponse> responses = annotations.stream()
                 .map(annotation -> AnnotationResponse.from(
                         annotation,
-                        postAnnotationService.findComments(annotation.getId()),
+                        commentsByAnnotationId.getOrDefault(annotation.getId(), List.of()),
                         viewerId
                 ))
                 .toList();

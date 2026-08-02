@@ -45,3 +45,13 @@ test("addAnnotationMark stores annotation mark in serialized document", () => {
     assert.match(content, /"7"/);
     editor.destroy();
 });
+
+test("createRichTextEditor surfaces invalid ProseMirror JSON", () => {
+    const mount = document.createElement("div");
+
+    assert.throws(() => createRichTextEditor({
+        mount,
+        initialContent: "{\"type\":\"doc\",\"content\":{\"type\":\"paragraph\"}}",
+        onChange: () => {}
+    }), /Rich Text 본문 형식/);
+});

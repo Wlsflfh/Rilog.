@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+    addAnnotationToFirstTextMatch,
     extractRichTextAnnotationIds,
     extractRichTextPlainText,
     renderRichTextDocument
@@ -81,4 +82,38 @@ test("extractRichTextPlainText keeps post excerpts readable", () => {
             {type: "paragraph", content: [{type: "text", text: "본문"}]}
         ]
     }), "제목 본문");
+});
+
+test("addAnnotationToFirstTextMatch wraps the selected text with an annotation mark", () => {
+    const updated = JSON.parse(addAnnotationToFirstTextMatch({
+        type: "doc",
+        content: [{
+            type: "paragraph",
+            content: [{type: "text", text: "앞 문장 댓글 문장 뒤"}]
+        }]
+    }, "댓글 문장", 31));
+
+    assert.deepEqual(updated.content[0].content, [
+        {type: "text", text: "앞 문장 "},
+        {type: "text", text: "댓글 문장", marks: [{type: "annotation", attrs: {id: "31"}}]},
+        {type: "text", text: " 뒤"}
+    ]);
+});
+
+test("renderRichTextDocument renders unsafe link marks as plain text", () => {
+    const rendered = renderRichTextDocument({
+        type: "doc",
+        content: [{
+            type: "paragraph",
+            content: [{
+                type: "text",
+                text: "위험한 링크",
+                marks: [{type: "link", attrs: {href: "javascript:alert(1)"}}]
+            }]
+        }]
+    });
+
+    const html = serialize(rendered);
+    assert.doesNotMatch(html, /<a/);
+    assert.match(html, />위험한 링크</);
 });

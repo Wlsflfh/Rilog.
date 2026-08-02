@@ -3,6 +3,7 @@ const BLOCK_TAGS = {
     blockquote: "blockquote",
     code_block: "pre"
 };
+const SAFE_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
 function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -46,6 +47,15 @@ export function extractRichTextPlainText(source) {
     return chunks.join(" ").replace(/\s+/g, " ").trim();
 }
 
+export function addAnnotationToFirstTextMatch(source, selectedText, annotationId) {
+    const target = (selectedText || "").trim();
+    const documentData = cloneDocument(parseDocument(source));
+    if (!target || !addAnnotationToNode(documentData, target, annotationId)) {
+        return typeof source === "string" ? source : JSON.stringify(documentData);
+    }
+    return JSON.stringify(documentData);
+}
+
 export function renderRichTextDocument(source) {
     const documentData = parseDocument(source);
     const root = element("div", "markdown-body rich-text-body");
@@ -54,6 +64,48 @@ export function renderRichTextDocument(source) {
         root.append(element("p", "markdown-placeholder", "본문이 비어있어요."));
     }
     return root;
+}
+
+function addAnnotationToNode(node, target, annotationId) {
+    if (!node || typeof node !== "object" || !Array.isArray(node.content)) {
+        return false;
+    }
+
+    for (let index = 0; index < node.content.length; index += 1) {
+        const child = node.content[index];
+        if (child?.type === "text" && typeof child.text === "string") {
+            const matchIndex = child.text.indexOf(target);
+            if (matchIndex !== -1) {
+                node.content.splice(index, 1, ...splitTextWithAnnotation(child, matchIndex, target, annotationId));
+                return true;
+            }
+        }
+        if (addAnnotationToNode(child, target, annotationId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function splitTextWithAnnotation(node, matchIndex, target, annotationId) {
+    const before = node.text.slice(0, matchIndex);
+    const selected = node.text.slice(matchIndex, matchIndex + target.length);
+    const after = node.text.slice(matchIndex + target.length);
+    const baseMarks = Array.isArray(node.marks) ? node.marks : [];
+    const annotationMark = {type: "annotation", attrs: {id: String(annotationId)}};
+    const selectedMarks = [
+        ...baseMarks.filter(mark => !(mark.type === "annotation" && String(mark.attrs?.id) === String(annotationId))),
+        annotationMark
+    ];
+    return [
+        before ? {...node, text: before} : null,
+        {...node, text: selected, marks: selectedMarks},
+        after ? {...node, text: after} : null
+    ].filter(Boolean);
+}
+
+function cloneDocument(documentData) {
+    return JSON.parse(JSON.stringify(documentData));
 }
 
 function renderBlock(node) {
@@ -125,12 +177,24 @@ function wrapMark(child, mark) {
         return code;
     }
     if (mark.type === "link") {
+        const href = safeLink(mark.attrs?.href);
+        if (!href) return child;
         const link = element("a");
-        link.href = mark.attrs?.href || "#";
+        link.href = href;
         link.append(child);
         return link;
     }
     return child;
+}
+
+function safeLink(href) {
+    if (!href) return null;
+    try {
+        const url = new URL(href, window.location.origin);
+        return SAFE_LINK_PROTOCOLS.has(url.protocol) ? url.href : null;
+    } catch {
+        return null;
+    }
 }
 
 function textContent(node) {

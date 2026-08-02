@@ -23,7 +23,7 @@ export function parseRichTextDoc(source) {
     try {
         const json = typeof source === "string" ? JSON.parse(source) : source;
         return richTextSchema.nodeFromJSON(json);
-    } catch {
-        return richTextSchema.topNodeType.createAndFill();
+    } catch (error) {
+        throw new Error("Rich Text 본문 형식이 올바르지 않습니다.", {cause: error});
     }
 }

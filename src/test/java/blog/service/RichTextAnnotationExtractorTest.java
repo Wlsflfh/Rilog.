@@ -55,4 +55,42 @@ class RichTextAnnotationExtractorTest {
                 .extracting("code")
                 .isEqualTo(DomainErrorCode.INVALID_INPUT);
     }
+
+    @Test
+    @DisplayName("ProseMirror 구조가 아닌 doc JSON은 거절한다.")
+    void rejectMalformedDoc() {
+        assertThatThrownBy(() -> extractor.validate("{\"type\":\"doc\",\"content\":{\"type\":\"paragraph\"}}"))
+                .isInstanceOf(BlogException.class)
+                .extracting("code")
+                .isEqualTo(DomainErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("안전하지 않은 link mark는 거절한다.")
+    void rejectUnsafeLinkMark() {
+        String content = """
+                {
+                  "type": "doc",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "위험한 링크",
+                          "marks": [
+                            {"type": "link", "attrs": {"href": "javascript:alert(1)"}}
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """;
+
+        assertThatThrownBy(() -> extractor.validate(content))
+                .isInstanceOf(BlogException.class)
+                .extracting("code")
+                .isEqualTo(DomainErrorCode.INVALID_INPUT);
+    }
 }

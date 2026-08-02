@@ -26,6 +26,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -237,7 +238,7 @@ class AuthSecurityIntegrationTest {
         Long postId = Long.parseLong(postLocation.substring(postLocation.lastIndexOf("/") + 1));
 
         // when - then
-        mockMvc.perform(post("/posts/" + postId + "/annotations")
+        String annotationLocation = mockMvc.perform(post("/posts/" + postId + "/annotations")
                         .with(oidcLogin().oidcUser(principal(user.getId(), "visitor3@example.com")))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -250,7 +251,26 @@ class AuthSecurityIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.quotedText").value("본문"))
-                .andExpect(jsonPath("$.comments[0].content").value("여기에 메모"));
+                .andExpect(jsonPath("$.comments[0].content").value("여기에 메모"))
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+        Long annotationId = Long.parseLong(annotationLocation.substring(annotationLocation.lastIndexOf("/") + 1));
+
+        mockMvc.perform(put("/posts/" + postId)
+                        .with(oidcLogin().oidcUser(principal(user.getId(), "visitor3@example.com")))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "제목",
+                                  "content": "{\\"type\\":\\"doc\\",\\"content\\":[{\\"type\\":\\"paragraph\\",\\"content\\":[{\\"type\\":\\"text\\",\\"text\\":\\"본문\\",\\"marks\\":[{\\"type\\":\\"annotation\\",\\"attrs\\":{\\"id\\":\\"%d\\"}}]}]}]}",
+                                  "contentType": "RICH_TEXT",
+                                  "category": "IT",
+                                  "postStatus": "PUBLIC"
+                                }
+                                """.formatted(annotationId)))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/posts/" + postId + "/annotations"))
                 .andExpect(status().isOk())

@@ -10,5 +10,7 @@ public interface PostAnnotationCommentRepository extends JpaRepository<PostAnnot
 
     List<PostAnnotationComment> findByAnnotationIdOrderByCreatedAtAsc(Long annotationId);
 
+    List<PostAnnotationComment> findByAnnotationIdInOrderByCreatedAtAsc(List<Long> annotationIds);
+
     Optional<PostAnnotationComment> findByIdAndAnnotationId(Long id, Long annotationId);
 }

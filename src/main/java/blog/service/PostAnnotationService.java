@@ -16,8 +16,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +30,7 @@ public class PostAnnotationService {
     private final PostAnnotationRepository postAnnotationRepository;
     private final PostAnnotationCommentRepository postAnnotationCommentRepository;
     private final PostFinder postFinder;
+    private final RichTextAnnotationExtractor richTextAnnotationExtractor;
     private final UserService userService;
 
     public List<PostAnnotation> findByPost(Long postId, Long viewerId) {
@@ -34,7 +38,12 @@ public class PostAnnotationService {
         if (!post.isViewableBy(viewerId)) {
             throw new BlogException(DomainErrorCode.UNAUTHORIZED_USER, "비공개 게시글 문장 댓글 조회 권한이 없습니다.");
         }
-        return postAnnotationRepository.findByPostIdAndStatusOrderByCreatedAtAsc(postId, PostAnnotationStatus.ACTIVE);
+        Set<Long> anchoredIds = post.getContentType() == PostContentType.RICH_TEXT
+                ? richTextAnnotationExtractor.extractAnnotationIds(post.getContent())
+                : Set.of();
+        return postAnnotationRepository.findByPostIdAndStatusOrderByCreatedAtAsc(postId, PostAnnotationStatus.ACTIVE).stream()
+                .filter(annotation -> anchoredIds.contains(annotation.getId()))
+                .toList();
     }
 
     public PostAnnotation findActive(Long postId, Long annotationId) {
@@ -43,6 +52,18 @@ public class PostAnnotationService {
 
     public List<PostAnnotationComment> findComments(Long annotationId) {
         return postAnnotationCommentRepository.findByAnnotationIdOrderByCreatedAtAsc(annotationId);
+    }
+
+    public Map<Long, List<PostAnnotationComment>> findCommentsByAnnotationIds(List<Long> annotationIds) {
+        if (annotationIds.isEmpty()) {
+            return Map.of();
+        }
+        return postAnnotationCommentRepository.findByAnnotationIdInOrderByCreatedAtAsc(annotationIds).stream()
+                .collect(Collectors.groupingBy(
+                        comment -> comment.getAnnotation().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
     }
 
     @Transactional

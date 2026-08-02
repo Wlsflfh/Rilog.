@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
+import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -31,6 +33,7 @@ public class RichTextAnnotationExtractor {
             if (root == null || !"doc".equals(root.path("type").asText())) {
                 throw invalid();
             }
+            validateNode(root, true);
             return root;
         } catch (BlogException exception) {
             throw exception;
@@ -61,6 +64,71 @@ public class RichTextAnnotationExtractor {
             for (JsonNode child : content) {
                 collect(child, ids);
             }
+        }
+    }
+
+    private void validateNode(JsonNode node, boolean root) {
+        if (!node.isObject()) {
+            throw invalid();
+        }
+        String type = node.path("type").asText("");
+        if (type.isBlank()) {
+            throw invalid();
+        }
+        if (root && !"doc".equals(type)) {
+            throw invalid();
+        }
+        if ("text".equals(type) && !node.path("text").isTextual()) {
+            throw invalid();
+        }
+
+        JsonNode marks = node.get("marks");
+        if (marks != null) {
+            if (!marks.isArray()) {
+                throw invalid();
+            }
+            for (JsonNode mark : marks) {
+                validateMark(mark);
+            }
+        }
+
+        JsonNode content = node.get("content");
+        if (content == null) {
+            return;
+        }
+        if (!content.isArray()) {
+            throw invalid();
+        }
+        for (JsonNode child : content) {
+            validateNode(child, false);
+        }
+    }
+
+    private void validateMark(JsonNode mark) {
+        if (!mark.isObject()) {
+            throw invalid();
+        }
+        String type = mark.path("type").asText("");
+        if (!List.of("annotation", "strong", "em", "code", "link").contains(type)) {
+            throw invalid();
+        }
+        if ("annotation".equals(type) && idOf(mark.path("attrs").path("id")) == null) {
+            throw invalid();
+        }
+        if ("link".equals(type) && !isSafeLink(mark.path("attrs").path("href").asText(""))) {
+            throw invalid();
+        }
+    }
+
+    private boolean isSafeLink(String href) {
+        try {
+            URI uri = URI.create(href);
+            String scheme = uri.getScheme();
+            return "http".equalsIgnoreCase(scheme)
+                    || "https".equalsIgnoreCase(scheme)
+                    || "mailto".equalsIgnoreCase(scheme);
+        } catch (IllegalArgumentException exception) {
+            return false;
         }
     }
 

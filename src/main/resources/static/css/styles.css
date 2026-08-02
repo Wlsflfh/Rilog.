@@ -1211,6 +1211,27 @@ body:has(.editor-page) .app-header {
     letter-spacing: 0;
 }
 
+.annotation-selection-action {
+    position: absolute;
+    z-index: 31;
+    min-width: 112px;
+    min-height: 34px;
+    padding: 0 12px;
+    color: #fff;
+    background: var(--navy-700);
+    border: 0;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.annotation-selection-action:disabled {
+    opacity: 0.65;
+    cursor: progress;
+}
+
 .annotation-comment {
     margin: 10px 0 0;
     color: var(--text-secondary);

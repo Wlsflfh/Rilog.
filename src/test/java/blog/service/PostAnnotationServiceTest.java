@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -28,11 +29,13 @@ class PostAnnotationServiceTest {
     private final PostAnnotationRepository postAnnotationRepository = mock(PostAnnotationRepository.class);
     private final PostAnnotationCommentRepository postAnnotationCommentRepository = mock(PostAnnotationCommentRepository.class);
     private final PostFinder postFinder = mock(PostFinder.class);
+    private final RichTextAnnotationExtractor richTextAnnotationExtractor = new RichTextAnnotationExtractor();
     private final UserService userService = mock(UserService.class);
     private final PostAnnotationService service = new PostAnnotationService(
             postAnnotationRepository,
             postAnnotationCommentRepository,
             postFinder,
+            richTextAnnotationExtractor,
             userService
     );
 
@@ -89,6 +92,37 @@ class PostAnnotationServiceTest {
                 .extracting("code")
                 .isEqualTo(DomainErrorCode.UNAUTHORIZED_USER);
         verify(postAnnotationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("본문 mark가 남아있는 active annotation만 조회한다.")
+    void findOnlyAnchoredAnnotations() {
+        Post post = new Post(
+                new User("작성자", "author@example.com", null),
+                "제목",
+                """
+                {"type":"doc","content":[{"type":"paragraph","content":[
+                    {"type":"text","text":"남은 문장","marks":[{"type":"annotation","attrs":{"id":"1"}}]},
+                    {"type":"text","text":" 지워진 문장"}
+                ]}]}
+                """,
+                null,
+                PostStatus.PUBLIC,
+                "title",
+                null,
+                PostContentType.RICH_TEXT
+        );
+        PostAnnotation kept = mock(PostAnnotation.class);
+        PostAnnotation orphan = mock(PostAnnotation.class);
+        given(kept.getId()).willReturn(1L);
+        given(orphan.getId()).willReturn(2L);
+        given(postFinder.find(1L)).willReturn(post);
+        given(postAnnotationRepository.findByPostIdAndStatusOrderByCreatedAtAsc(1L, PostAnnotationStatus.ACTIVE))
+                .willReturn(List.of(kept, orphan));
+
+        List<PostAnnotation> annotations = service.findByPost(1L, null);
+
+        assertThat(annotations).containsExactly(kept);
     }
 
     @Test

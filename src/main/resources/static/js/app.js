@@ -23,7 +23,7 @@ import {
     uploadImage
 } from "/js/api.js";
 import {extractHeadings, renderMarkdown} from "/js/markdown.js";
-import {extractRichTextPlainText, renderRichTextDocument} from "/js/rich-text.js";
+import {addAnnotationToFirstTextMatch, extractRichTextPlainText, renderRichTextDocument} from "/js/rich-text.js";
 import {createRichTextEditor} from "/js/rich-text-editor.bundle.js";
 import {
     createCanvasEditor,
@@ -353,6 +353,70 @@ function enableAnnotationInteractions(root, annotations, postId) {
             openAnnotationPopover(node, annotation, postId);
         });
     });
+}
+
+function enableDetailAnnotationCreation(root, post) {
+    if (!state.user) return;
+    let action = null;
+    const removeAction = () => {
+        action?.remove();
+        action = null;
+    };
+    root.addEventListener("mouseup", () => {
+        window.setTimeout(() => {
+            const selection = window.getSelection();
+            const quotedText = selection?.toString().trim();
+            if (!selection || selection.rangeCount === 0 || !quotedText) {
+                removeAction();
+                return;
+            }
+            const range = selection.getRangeAt(0);
+            if (!root.contains(range.commonAncestorContainer)) {
+                removeAction();
+                return;
+            }
+            removeAction();
+            const rect = range.getBoundingClientRect();
+            action = button("문장 댓글", "annotation-selection-action", async () => {
+                const content = window.prompt("문장 댓글");
+                if (!content?.trim()) return;
+                action.disabled = true;
+                try {
+                    const annotation = await createAnnotation(post.id, {
+                        quotedText,
+                        content: content.trim()
+                    });
+                    const nextContent = addAnnotationToFirstTextMatch(post.content, quotedText, annotation.id);
+                    if (nextContent === post.content) {
+                        throw new Error("선택한 문장을 본문에 표시하지 못했습니다.");
+                    }
+                    await updatePost(post.id, richTextPostPayload(post, nextContent));
+                    showToast("문장 댓글을 붙였어요.");
+                    await renderDetail(post.id);
+                } catch (error) {
+                    showToast(error.message);
+                } finally {
+                    removeAction();
+                    selection.removeAllRanges();
+                }
+            });
+            action.style.left = `${Math.max(16, Math.min(window.innerWidth - 128, rect.left))}px`;
+            action.style.top = `${window.scrollY + rect.top - 44}px`;
+            document.body.append(action);
+        }, 0);
+    });
+}
+
+function richTextPostPayload(post, content) {
+    return {
+        title: post.title,
+        content,
+        contentType: POST_CONTENT_TYPES.RICH_TEXT,
+        summary: extractRichTextPlainText(content).slice(0, 160),
+        thumbnailUrl: post.thumbnailUrl || null,
+        category: post.category,
+        postStatus: post.postStatus
+    };
 }
 
 function openAnnotationPopover(anchor, annotation, postId) {
@@ -871,6 +935,7 @@ async function renderDetail(id) {
             detailContent.append(renderedContent);
             if (isRichTextPost) {
                 enableAnnotationInteractions(renderedContent, annotations, post.id);
+                enableDetailAnnotationCreation(renderedContent, post);
             }
         }
         article.append(detailContent);
@@ -1590,7 +1655,7 @@ function createCanvasField(initialValue, onChange) {
     return field;
 }
 
-function createRichTextField(initialValue, onChange, error = null, postId = null) {
+function createRichTextField(initialValue, onChange, error = null, postId = null, persistContent = null) {
     const field = element("div", "form-field");
     const toolbar = element("div", "rich-text-toolbar");
     const mount = element("div", "rich-text-editor-mount");
@@ -1618,7 +1683,11 @@ function createRichTextField(initialValue, onChange, error = null, postId = null
                 content: content.trim()
             });
             editor.addAnnotationMark(annotation.id);
-            onChange(editor.getContent());
+            const nextContent = editor.getContent();
+            onChange(nextContent);
+            if (persistContent) {
+                await persistContent(nextContent);
+            }
             showToast("문장 댓글을 붙였어요.");
         } catch (error) {
             showToast(error.message);
@@ -1844,7 +1913,24 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
                 const richText = createRichTextField(richTextContent, value => {
                     richTextContent = value;
                     setFieldError(content, contentError);
-                }, contentError, post?.id || null);
+                }, contentError, post?.id || null, post ? async nextContent => {
+                    const titleText = title.value.trim();
+                    if (!titleText) {
+                        throw new Error("제목을 입력한 뒤 문장 댓글을 붙일 수 있어요.");
+                    }
+                    if (!category.value) {
+                        throw new Error("카테고리를 선택한 뒤 문장 댓글을 붙일 수 있어요.");
+                    }
+                    await updatePost(post.id, {
+                        title: titleText,
+                        content: nextContent,
+                        contentType,
+                        summary: extractRichTextPlainText(nextContent).slice(0, 160),
+                        thumbnailUrl: thumbnail.value.trim() || null,
+                        category: category.value,
+                        postStatus: form.elements.postStatus.value
+                    });
+                } : null);
                 richTextEditor = richText.editor;
                 return richText.field;
             }
