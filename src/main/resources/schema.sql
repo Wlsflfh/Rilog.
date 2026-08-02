@@ -1,4 +1,6 @@
 DROP TABLE IF EXISTS post_likes;
+DROP TABLE IF EXISTS post_annotation_comments;
+DROP TABLE IF EXISTS post_annotations;
 DROP TABLE IF EXISTS post_comments;
 DROP TABLE IF EXISTS post_view_events;
 DROP TABLE IF EXISTS posts;
@@ -32,6 +34,7 @@ CREATE TABLE posts (
     summary          VARCHAR(500),
     content          LONGTEXT     NOT NULL,
     content_type     VARCHAR(20)  NOT NULL DEFAULT 'MARKDOWN',
+    category         VARCHAR(20)  NOT NULL DEFAULT 'IT',
     thumbnail_url    VARCHAR(500),
     post_status      VARCHAR(20)  NOT NULL,
     view_count       BIGINT       NOT NULL DEFAULT 0,
@@ -84,6 +87,45 @@ CREATE TABLE post_comments (
             REFERENCES users (id)
 );
 
+CREATE TABLE post_annotations (
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
+    post_id       BIGINT       NOT NULL,
+    author_id     BIGINT       NOT NULL,
+    quoted_text   VARCHAR(500) NOT NULL,
+    status        VARCHAR(20)  NOT NULL,
+    created_at    DATETIME(6)  NOT NULL,
+    updated_at    DATETIME(6)  NOT NULL,
+
+    PRIMARY KEY (id),
+
+    CONSTRAINT fk_post_annotations_post
+        FOREIGN KEY (post_id)
+            REFERENCES posts (id),
+
+    CONSTRAINT fk_post_annotations_author
+        FOREIGN KEY (author_id)
+            REFERENCES users (id)
+);
+
+CREATE TABLE post_annotation_comments (
+    id              BIGINT        NOT NULL AUTO_INCREMENT,
+    annotation_id   BIGINT        NOT NULL,
+    user_id         BIGINT        NOT NULL,
+    content         VARCHAR(1000) NOT NULL,
+    created_at      DATETIME(6)   NOT NULL,
+    updated_at      DATETIME(6)   NOT NULL,
+
+    PRIMARY KEY (id),
+
+    CONSTRAINT fk_post_annotation_comments_annotation
+        FOREIGN KEY (annotation_id)
+            REFERENCES post_annotations (id),
+
+    CONSTRAINT fk_post_annotation_comments_user
+        FOREIGN KEY (user_id)
+            REFERENCES users (id)
+);
+
 CREATE TABLE post_view_events (
     id            BIGINT      NOT NULL AUTO_INCREMENT,
     post_id       BIGINT      NOT NULL,
@@ -100,6 +142,7 @@ CREATE TABLE post_view_events (
 CREATE INDEX idx_posts_user_id ON posts (user_id);
 CREATE INDEX idx_posts_created_at ON posts (created_at);
 CREATE INDEX idx_posts_status_created_at ON posts (post_status, created_at);
+CREATE INDEX idx_posts_status_category_created_at ON posts (post_status, category, created_at);
 CREATE UNIQUE INDEX uk_posts_user_slug ON posts (user_id, slug);
 
 CREATE INDEX idx_post_likes_post_id ON post_likes (post_id);
@@ -107,5 +150,9 @@ CREATE INDEX idx_post_likes_user_id ON post_likes (user_id);
 
 CREATE INDEX idx_post_comments_post_created_at ON post_comments (post_id, created_at);
 CREATE INDEX idx_post_comments_user_id ON post_comments (user_id);
+CREATE INDEX idx_post_annotations_post_status_created_at ON post_annotations (post_id, status, created_at);
+CREATE INDEX idx_post_annotations_author_id ON post_annotations (author_id);
+CREATE INDEX idx_post_annotation_comments_annotation_created_at ON post_annotation_comments (annotation_id, created_at);
+CREATE INDEX idx_post_annotation_comments_user_id ON post_annotation_comments (user_id);
 
 CREATE INDEX idx_post_view_events_post_created_at ON post_view_events (post_id, created_at);
