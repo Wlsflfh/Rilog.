@@ -50,6 +50,7 @@ public class PostAnnotationService {
         Post post = postFinder.find(postId);
         User user = userService.getUser(userId);
         ensureRichText(post);
+        ensureViewable(post, userId);
 
         PostAnnotation annotation = postAnnotationRepository.save(new PostAnnotation(post, user, request.quotedText()));
         postAnnotationCommentRepository.save(new PostAnnotationComment(annotation, user, request.content()));
@@ -60,6 +61,7 @@ public class PostAnnotationService {
     public Long addComment(Long postId, Long annotationId, Long userId, AnnotationCommentRequest request) {
         PostAnnotation annotation = activeAnnotation(postId, annotationId);
         User user = userService.getUser(userId);
+        ensureViewable(annotation.getPost(), userId);
         return postAnnotationCommentRepository.save(new PostAnnotationComment(annotation, user, request.content())).getId();
     }
 
@@ -96,6 +98,12 @@ public class PostAnnotationService {
     private void ensureRichText(Post post) {
         if (post.getContentType() != PostContentType.RICH_TEXT) {
             throw new BlogException(DomainErrorCode.INVALID_INPUT, "Rich Text 글에만 문장 댓글을 남길 수 있습니다.");
+        }
+    }
+
+    private void ensureViewable(Post post, Long userId) {
+        if (!post.isViewableBy(userId)) {
+            throw new BlogException(DomainErrorCode.UNAUTHORIZED_USER, "비공개 게시글 문장 댓글 권한이 없습니다.");
         }
     }
 }

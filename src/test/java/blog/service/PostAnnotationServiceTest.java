@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 class PostAnnotationServiceTest {
@@ -72,6 +73,22 @@ class PostAnnotationServiceTest {
                 .isInstanceOf(BlogException.class)
                 .extracting("code")
                 .isEqualTo(DomainErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("비공개 글을 볼 수 없는 사용자는 문장 댓글을 만들 수 없다.")
+    void rejectPrivatePostAnnotationByUnauthorizedUser() {
+        Post post = mock(Post.class);
+        given(post.getContentType()).willReturn(PostContentType.RICH_TEXT);
+        given(post.isViewableBy(2L)).willReturn(false);
+        given(postFinder.find(1L)).willReturn(post);
+        given(userService.getUser(2L)).willReturn(new User("방문자", "visitor@example.com", null));
+
+        assertThatThrownBy(() -> service.create(1L, 2L, new AnnotationRequest("문장", "메모")))
+                .isInstanceOf(BlogException.class)
+                .extracting("code")
+                .isEqualTo(DomainErrorCode.UNAUTHORIZED_USER);
+        verify(postAnnotationRepository, never()).save(any());
     }
 
     @Test
