@@ -39,6 +39,7 @@ out/
 # Local visual brainstorming artifacts
 .superpowers/
 .worktrees/
+node_modules/
 
 # Runtime uploaded files
 src/main/resources/static/uploads/

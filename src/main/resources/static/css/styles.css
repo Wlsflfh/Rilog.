@@ -1845,6 +1845,29 @@ body:has(.editor-page) .app-header {
 }
 .markdown-placeholder { color: var(--text-tertiary); }
 
+.rich-text-editor-mount {
+    min-height: min(64vh, 760px);
+    padding: 42px 30px 30px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.rich-text-editor-mount .ProseMirror {
+    max-width: 820px;
+    min-height: 480px;
+    margin: 0 auto;
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1.95;
+    letter-spacing: 0;
+    outline: none;
+}
+
+.rich-text-editor-mount .ProseMirror p {
+    margin: 0 0 1em;
+}
+
 .template-page {
     display: grid;
     gap: 18px;

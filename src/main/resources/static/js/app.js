@@ -23,6 +23,7 @@ import {
 } from "/js/api.js";
 import {extractHeadings, renderMarkdown} from "/js/markdown.js";
 import {extractRichTextPlainText, renderRichTextDocument} from "/js/rich-text.js";
+import {createRichTextEditor} from "/js/rich-text-editor.bundle.js";
 import {
     createCanvasEditor,
     createEmptyCanvasDocument,
@@ -1588,6 +1589,19 @@ function createCanvasField(initialValue, onChange) {
     return field;
 }
 
+function createRichTextField(initialValue, onChange, error = null) {
+    const field = element("div", "form-field");
+    const mount = element("div", "rich-text-editor-mount");
+    const editor = createRichTextEditor({
+        mount,
+        initialContent: initialValue,
+        onChange
+    });
+    field.append(element("span", "field-label", "본문"), mount);
+    if (error) field.append(error);
+    return {field, editor};
+}
+
 function createVisibilitySelector(selectedValue) {
     const fieldset = element("fieldset", "visibility-field");
     fieldset.append(element("legend", "visibility-title", "공개 설정"));
@@ -1665,7 +1679,12 @@ function clearDraft(userId, contentType = POST_CONTENT_TYPES.MARKDOWN) {
 }
 
 function normalizeEditorType(value) {
-    return value?.toLowerCase() === "canvas" ? POST_CONTENT_TYPES.CANVAS : POST_CONTENT_TYPES.MARKDOWN;
+    const normalized = value?.toLowerCase();
+    if (normalized === "canvas") return POST_CONTENT_TYPES.CANVAS;
+    if (normalized === "rich-text" || normalized === "rich_text" || normalized === "richtext") {
+        return POST_CONTENT_TYPES.RICH_TEXT;
+    }
+    return POST_CONTENT_TYPES.MARKDOWN;
 }
 
 function canvasSummary(content) {
@@ -1705,6 +1724,7 @@ function renderTemplatePicker() {
     const grid = element("div", "template-grid");
     grid.append(
         createTemplateCard("Markdown으로 작성", "글, 코드, 표, 이미지 중심의 기본 개발 블로그 글쓰기.", "#/write?type=markdown"),
+        createTemplateCard("Rich Text로 작성", "문장에 바로 댓글을 붙일 수 있는 블록 글쓰기.", "#/write?type=rich-text"),
         createTemplateCard("Canvas로 작성", "텍스트와 이미지를 자유롭게 배치하는 공간형 기록.", "#/write?type=canvas")
     );
     section.append(grid);
@@ -1746,6 +1766,8 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         contentError.setAttribute("aria-live", "polite");
         content.addEventListener("input", () => setFieldError(content, contentError));
         let canvasContent = post?.content || draft?.content || serializeCanvasDocument(createEmptyCanvasDocument());
+        let richTextContent = post?.content || draft?.content || "{\"type\":\"doc\",\"content\":[]}";
+        let richTextEditor = null;
 
         const thumbnail = document.createElement("input");
         thumbnail.type = "url";
@@ -1762,7 +1784,9 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         const saveDraftButton = button("임시저장", "button button-secondary", () => {
             const currentContent = contentType === POST_CONTENT_TYPES.CANVAS
                     ? canvasContent
-                    : content.value;
+                    : contentType === POST_CONTENT_TYPES.RICH_TEXT
+                            ? richTextEditor.getContent()
+                            : content.value;
             saveDraft(state.user.id, contentType, {
                 title: title.value,
                 content: currentContent,
@@ -1780,14 +1804,27 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         actionGroup.append(submit);
         actions.append(actionGroup);
 
+        const contentField = (() => {
+            if (contentType === POST_CONTENT_TYPES.CANVAS) {
+                return createCanvasField(canvasContent, value => {
+                    canvasContent = value;
+                });
+            }
+            if (contentType === POST_CONTENT_TYPES.RICH_TEXT) {
+                const richText = createRichTextField(richTextContent, value => {
+                    richTextContent = value;
+                    setFieldError(content, contentError);
+                }, contentError);
+                richTextEditor = richText.editor;
+                return richText.field;
+            }
+            return createMarkdownField(content, contentError);
+        })();
+
         form.append(
             titleField,
             element("div", "editor-title-rule"),
-            contentType === POST_CONTENT_TYPES.CANVAS
-                    ? createCanvasField(canvasContent, value => {
-                        canvasContent = value;
-                    })
-                    : createMarkdownField(content, contentError),
+            contentField,
             element("div", "editor-options"),
             actions
         );
@@ -1800,7 +1837,9 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
             event.preventDefault();
             const body = contentType === POST_CONTENT_TYPES.CANVAS
                     ? canvasContent
-                    : content.value.trim();
+                    : contentType === POST_CONTENT_TYPES.RICH_TEXT
+                            ? richTextEditor.getContent()
+                            : content.value.trim();
             const titleText = title.value.trim();
             setFieldError(title, titleError);
             setFieldError(content, contentError);
@@ -1826,7 +1865,9 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
                 contentType,
                 summary: contentType === POST_CONTENT_TYPES.CANVAS
                         ? canvasSummary(body)
-                        : body.replace(/\s+/g, " ").slice(0, 160),
+                        : contentType === POST_CONTENT_TYPES.RICH_TEXT
+                                ? extractRichTextPlainText(body).slice(0, 160)
+                                : body.replace(/\s+/g, " ").slice(0, 160),
                 thumbnailUrl: thumbnail.value.trim() || null,
                 category: category.value,
                 postStatus: form.elements.postStatus.value

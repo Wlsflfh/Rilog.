@@ -1,0 +1,22 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:editor": "esbuild src/main/frontend/editor/rich-text-editor.js --bundle --format=esm --platform=browser --target=es2022 --outfile=src/main/resources/static/js/rich-text-editor.bundle.js",
+    "test:js": "node --test src/test/js/*.test.mjs",
+    "verify:editor": "npm run build:editor && npm run test:js"
+  },
+  "dependencies": {
+    "prosemirror-commands": "1.7.1",
+    "prosemirror-history": "1.5.0",
+    "prosemirror-keymap": "1.2.3",
+    "prosemirror-model": "1.25.9",
+    "prosemirror-schema-basic": "1.2.4",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-view": "1.42.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "jsdom": "29.1.1"
+  }
+}
