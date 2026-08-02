@@ -339,8 +339,50 @@ body:has(.editor-page) .app-header {
     display: none;
 }
 
+.category-feed-header {
+    display: grid;
+    gap: 14px;
+    margin: 2px 0 28px;
+    padding-bottom: 22px;
+    border-bottom: 14px solid var(--navy-950);
+    border-radius: 0 0 24px 24px;
+}
+
+.category-feed-header h1 {
+    margin: 0;
+    color: var(--navy-950);
+    font-size: clamp(32px, 4vw, 48px);
+    line-height: 1.05;
+    letter-spacing: -.06em;
+}
+
+.category-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.category-tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 14px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 850;
+}
+
+.category-tab:hover,
+.category-tab.is-active {
+    color: white;
+    background: var(--navy-950);
+}
+
 .feed-section {
-    margin-top: 64px;
+    margin-top: 30px;
 }
 
 .section-heading {
@@ -361,15 +403,15 @@ body:has(.editor-page) .app-header {
 
 .post-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 28px;
 }
 
 .post-card {
     position: relative;
     min-width: 0;
     overflow: hidden;
-    background: var(--surface);
+    background: var(--surface-raised);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
@@ -389,7 +431,7 @@ body:has(.editor-page) .app-header {
 }
 
 .post-card.has-thumbnail .post-card-content {
-    min-height: 370px;
+    min-height: 420px;
 }
 
 .post-label {
@@ -431,7 +473,7 @@ body:has(.editor-page) .app-header {
 .post-thumbnail {
     order: -1;
     width: 100%;
-    height: 150px;
+    height: 190px;
     margin-bottom: 20px;
     object-fit: cover;
     background: var(--canvas-subtle);
@@ -1140,6 +1182,58 @@ body:has(.editor-page) .app-header {
     cursor: pointer;
 }
 
+.rich-text-annotation {
+    background: color-mix(in srgb, var(--navy-700) 16%, transparent);
+    border-bottom: 2px solid var(--navy-700);
+    cursor: pointer;
+}
+
+.rich-text-annotation:hover,
+.rich-text-annotation:focus-visible {
+    background: color-mix(in srgb, var(--navy-700) 24%, transparent);
+}
+
+.annotation-popover {
+    position: absolute;
+    z-index: 30;
+    width: min(340px, calc(100vw - 32px));
+    padding: 16px;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+.annotation-popover strong {
+    display: block;
+    font-size: 14px;
+    letter-spacing: 0;
+}
+
+.annotation-comment {
+    margin: 10px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.annotation-comment-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.annotation-comment-form input {
+    min-width: 0;
+    flex: 1;
+    padding: 10px 12px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
 .editor-form {
     display: grid;
     gap: 18px;
@@ -1834,6 +1928,7 @@ body:has(.editor-page) .app-header {
 .canvas-toolbar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
     min-height: 58px;
     padding: 9px 12px;
@@ -1858,7 +1953,52 @@ body:has(.editor-page) .app-header {
     background: var(--navy-100);
 }
 
+.canvas-section-list,
+.canvas-section-nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+}
+
+.canvas-section-list {
+    margin-left: 4px;
+}
+
+.canvas-section-nav {
+    margin: 0 0 12px;
+}
+
+.canvas-section-tab {
+    display: inline-flex;
+    align-items: center;
+    max-width: 220px;
+    min-height: 32px;
+    padding: 6px 10px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.canvas-section-tab:hover {
+    color: white;
+    background: var(--navy-700);
+    border-color: var(--navy-700);
+}
+
 .canvas-image-input {
+    display: none;
+}
+
+.canvas-file-input {
     display: none;
 }
 
@@ -1981,6 +2121,17 @@ body:has(.editor-page) .app-header {
     box-shadow: none;
 }
 
+.canvas-node-file .canvas-node-shell,
+.canvas-node-link .canvas-node-shell {
+    background: color-mix(in srgb, #ffffff 90%, var(--canvas-subtle));
+}
+
+.canvas-node-group .canvas-node-shell {
+    background: color-mix(in srgb, var(--navy-100) 28%, transparent);
+    border: 2px dashed color-mix(in srgb, var(--navy-700) 42%, transparent);
+    box-shadow: none;
+}
+
 :root[data-theme="dark"] .canvas-stage .canvas-board,
 :root[data-theme="dark"] .canvas-document.canvas-board {
     background:
@@ -1989,7 +2140,7 @@ body:has(.editor-page) .app-header {
     background-size: 28px 28px;
 }
 
-.canvas-node-text,
+.canvas-node-markdown,
 .canvas-node-input {
     position: absolute;
     inset: 0;
@@ -2005,8 +2156,74 @@ body:has(.editor-page) .app-header {
     background: transparent;
     border: 0;
     border-radius: 0;
-    white-space: pre-wrap;
     box-shadow: none;
+}
+
+.canvas-node-markdown {
+    cursor: text;
+    font-size: 15px;
+    line-height: 1.55;
+}
+
+.canvas-node-markdown h1,
+.canvas-node-markdown h2,
+.canvas-node-markdown h3,
+.canvas-node-markdown h4,
+.canvas-node-markdown h5,
+.canvas-node-markdown h6 {
+    margin-top: .15em;
+}
+
+.canvas-node-asset {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    padding: 20px;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.canvas-node-asset strong {
+    overflow: hidden;
+    font-size: 17px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.canvas-node-asset small {
+    margin-top: 8px;
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.canvas-node-kind {
+    margin-bottom: 8px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.canvas-node-group-label {
+    position: absolute;
+    top: -30px;
+    left: 0;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .canvas-edges,
@@ -2435,6 +2652,12 @@ body:has(.editor-page) .app-header {
 :root[data-theme="dark"] .toast {
     color: #080b16;
     background: #f4f6ff;
+}
+
+@media (max-width: 1200px) {
+    .post-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 760px) {

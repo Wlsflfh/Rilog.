@@ -1,9 +1,11 @@
 import {
+    addAnnotationComment,
     createComment,
     createPost,
     deleteComment,
     deletePost,
     getComments,
+    getAnnotations,
     getCurrentUser,
     getLikedUsers,
     getMyPosts,
@@ -20,11 +22,14 @@ import {
     uploadImage
 } from "/js/api.js";
 import {extractHeadings, renderMarkdown} from "/js/markdown.js";
+import {extractRichTextPlainText, renderRichTextDocument} from "/js/rich-text.js";
 import {
     createCanvasEditor,
     createEmptyCanvasDocument,
+    createCanvasSectionNavigation,
     enableCanvasPanZoom,
     fitCanvasViewportToContent,
+    moveCanvasViewportToSection,
     renderCanvasDocument,
     serializeCanvasDocument
 } from "/js/canvas-editor.js";
@@ -48,8 +53,17 @@ const profileMenu = document.querySelector("#profile-menu");
 const state = {user: null};
 const POST_CONTENT_TYPES = {
     MARKDOWN: "MARKDOWN",
-    CANVAS: "CANVAS"
+    CANVAS: "CANVAS",
+    RICH_TEXT: "RICH_TEXT"
 };
+const POST_CATEGORIES = [
+    ["IT", "IT"],
+    ["EXERCISE", "운동"],
+    ["BOOK", "독서"],
+    ["DAILY", "일상"]
+];
+const DEFAULT_CATEGORY = "IT";
+const categoryLabel = value => POST_CATEGORIES.find(([category]) => category === value)?.[1] || "IT";
 
 function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -221,6 +235,9 @@ function postExcerpt(post) {
             return "Canvas로 정리한 글입니다.";
         }
     }
+    if (post.contentType === POST_CONTENT_TYPES.RICH_TEXT) {
+        return extractRichTextPlainText(post.content) || "Rich Text로 작성한 글입니다.";
+    }
     return post.content;
 }
 
@@ -229,7 +246,7 @@ function createPostCard(post) {
     const content = element("a", "post-card-content");
     content.href = postHref(post);
 
-    const category = element("span", "post-label", post.postStatus === "PRIVATE" ? "비공개" : "읽을거리");
+    const category = element("span", "post-label", post.postStatus === "PRIVATE" ? `비공개 · ${categoryLabel(post.category)}` : categoryLabel(post.category));
     const title = element("h2", null, post.title);
     const summary = element("p", "post-summary", postExcerpt(post));
     const meta = element("div", "post-meta");
@@ -323,6 +340,57 @@ function createDetailLikeAction(post, likedUsers) {
     return wrapper;
 }
 
+function enableAnnotationInteractions(root, annotations, postId) {
+    const byId = new Map(annotations.map(annotation => [String(annotation.id), annotation]));
+    root.querySelectorAll("[data-annotation-id]").forEach(node => {
+        const annotation = byId.get(node.dataset.annotationId);
+        if (!annotation) return;
+        node.title = annotation.comments?.[0]?.content || annotation.quotedText;
+        node.addEventListener("click", event => {
+            event.preventDefault();
+            openAnnotationPopover(node, annotation, postId);
+        });
+    });
+}
+
+function openAnnotationPopover(anchor, annotation, postId) {
+    document.querySelector(".annotation-popover")?.remove();
+    const popover = element("aside", "annotation-popover");
+    popover.append(element("strong", null, annotation.quotedText));
+    (annotation.comments || []).forEach(comment => {
+        popover.append(element("p", "annotation-comment", comment.content));
+    });
+    if (state.user) {
+        const form = element("form", "annotation-comment-form");
+        const input = document.createElement("input");
+        input.maxLength = 1000;
+        input.placeholder = "답글 입력";
+        const submit = button("보내기", "button button-primary", () => {});
+        submit.type = "submit";
+        form.append(input, submit);
+        form.addEventListener("submit", async event => {
+            event.preventDefault();
+            if (!input.value.trim()) return;
+            submit.disabled = true;
+            try {
+                await addAnnotationComment(postId, annotation.id, {content: input.value.trim()});
+                showToast("문장 댓글을 남겼어요.");
+                await renderDetail(postId);
+            } catch (error) {
+                showToast(error.message);
+            } finally {
+                submit.disabled = false;
+            }
+        });
+        popover.append(form);
+    }
+
+    const rect = anchor.getBoundingClientRect();
+    popover.style.left = `${Math.max(16, Math.min(window.innerWidth - 356, rect.right + 12))}px`;
+    popover.style.top = `${window.scrollY + rect.top}px`;
+    document.body.append(popover);
+}
+
 function renderComments(postId, comments) {
     const section = element("section", "comments-section");
     section.append(element("h2", null, `댓글 ${comments.length}`));
@@ -389,10 +457,12 @@ function renderComments(postId, comments) {
 
 function renderPostList(posts, options = {}) {
     const section = element("section", "feed-section");
-    const heading = element("div", "section-heading");
-    heading.append(element("h1", null, options.title || "새로운 글"));
-    if (options.description) heading.append(element("p", null, options.description));
-    section.append(heading);
+    if (!options.hideHeading) {
+        const heading = element("div", "section-heading");
+        heading.append(element("h1", null, options.title || "새로운 글"));
+        if (options.description) heading.append(element("p", null, options.description));
+        section.append(heading);
+    }
 
     if (!posts.length) {
         const empty = element("div", "empty-state");
@@ -415,31 +485,37 @@ function renderPostList(posts, options = {}) {
     return section;
 }
 
-async function renderHome() {
+function createCategoryTabs(selectedCategory) {
+    const tabs = element("nav", "category-tabs");
+    tabs.setAttribute("aria-label", "글 카테고리");
+    POST_CATEGORIES.forEach(([value, label]) => {
+        const link = element("a", `category-tab${selectedCategory === value ? " is-active" : ""}`, label);
+        link.href = value === DEFAULT_CATEGORY ? "#/" : `#/?category=${encodeHashSegment(value)}`;
+        link.setAttribute("aria-current", selectedCategory === value ? "page" : "false");
+        tabs.append(link);
+    });
+    return tabs;
+}
+
+async function renderHome(selectedCategory = DEFAULT_CATEGORY) {
     showLoading();
     try {
-        const posts = await getPosts();
+        const posts = await getPosts(selectedCategory);
         app.replaceChildren();
-        const hero = element("section", "hero");
-        const heroCopy = element("div", "hero-copy");
-        heroCopy.append(
-            element("span", "hero-eyebrow", "Rilog for developers"),
-            element("h1", null, "개발자의 기록이\n더 멀리 닿도록."),
-            element("p", null, "Markdown으로 편하게 쓰고, 내 지식이 검색과 피드를 통해 조용히 발견되는 블로그 플랫폼.")
+        const categoryHeader = element("section", "category-feed-header");
+        categoryHeader.append(
+            element("h1", null, categoryLabel(selectedCategory)),
+            createCategoryTabs(selectedCategory)
         );
-        if (state.user) {
-            const heroAction = element("a", "button button-primary hero-action", "새 글 쓰기");
-            heroAction.href = "#/write";
-            heroCopy.append(heroAction);
-        } else if (!state.user) {
-            const heroAction = element("a", "button button-primary hero-action", "Google로 시작하기");
-            heroAction.href = "/oauth2/authorization/google";
-            heroCopy.append(heroAction);
-        }
-        hero.append(heroCopy);
-        app.append(hero, renderPostList(posts));
+        app.append(categoryHeader, renderPostList(posts, {
+            title: `${categoryLabel(selectedCategory)} 최신 글`,
+            description: "관심 있는 분야의 글만 모아 볼 수 있어요.",
+            hideHeading: true,
+            emptyTitle: `${categoryLabel(selectedCategory)} 글이 아직 없어요`,
+            emptyMessage: "이 카테고리의 첫 번째 이야기를 기다리고 있어요."
+        }));
     } catch (error) {
-        showError(error, renderHome);
+        showError(error, () => renderHome(selectedCategory));
     }
 }
 
@@ -740,16 +816,18 @@ async function renderUserPost(username, slug) {
 async function renderDetail(id) {
     showLoading();
     try {
-        const [post, comments, likedUsers] = await Promise.all([
-            getPost(id),
+        const post = await getPost(id);
+        const isCanvasPost = post.contentType === POST_CONTENT_TYPES.CANVAS;
+        const isRichTextPost = post.contentType === POST_CONTENT_TYPES.RICH_TEXT;
+        const [comments, likedUsers, annotations] = await Promise.all([
             getComments(id),
-            getLikedUsers(id)
+            getLikedUsers(id),
+            isRichTextPost ? getAnnotations(id) : Promise.resolve([])
         ]);
         app.replaceChildren();
         const article = element("article", "post-detail");
-        const isCanvasPost = post.contentType === POST_CONTENT_TYPES.CANVAS;
         article.classList.toggle("canvas-post-detail", isCanvasPost);
-        const label = element("span", "post-label", post.postStatus === "PRIVATE" ? "비공개" : "읽을거리");
+        const label = element("span", "post-label", post.postStatus === "PRIVATE" ? `비공개 · ${categoryLabel(post.category)}` : categoryLabel(post.category));
         const title = element("h1", null, post.title);
         const meta = element("div", "detail-meta", `${post.authorNickname} · ${formatDate(post.createdAt)} · 조회 ${post.viewCount}`);
         article.append(label, title, meta);
@@ -765,22 +843,33 @@ async function renderDetail(id) {
 
         const renderedContent = isCanvasPost
                 ? renderCanvasDocument(post.content)
-                : renderMarkdown(post.content);
+                : isRichTextPost
+                        ? renderRichTextDocument(post.content)
+                        : renderMarkdown(post.content);
         const detailContent = element("div", "detail-content");
         detailContent.classList.toggle("detail-content-canvas", isCanvasPost);
         if (isCanvasPost) {
             const viewport = element("div", "canvas-detail-viewport");
+            let canvasViewport = null;
+            const sectionNavigation = createCanvasSectionNavigation(renderedContent, section => {
+                if (!canvasViewport) return;
+                moveCanvasViewportToSection(viewport, renderedContent, canvasViewport, section);
+            });
+            if (sectionNavigation) detailContent.append(sectionNavigation);
             viewport.append(renderedContent);
             detailContent.append(viewport);
             requestAnimationFrame(() => {
-                const initialViewport = fitCanvasViewportToContent(viewport, renderedContent, {
+                canvasViewport = fitCanvasViewportToContent(viewport, renderedContent, {
                     padding: 54,
                     maxZoom: 1.45
                 });
-                enableCanvasPanZoom(viewport, renderedContent, initialViewport);
+                enableCanvasPanZoom(viewport, renderedContent, canvasViewport);
             });
         } else {
             detailContent.append(renderedContent);
+            if (isRichTextPost) {
+                enableAnnotationInteractions(renderedContent, annotations, post.id);
+            }
         }
         article.append(detailContent);
         const footer = element("div", "detail-actions");
@@ -804,7 +893,7 @@ async function renderDetail(id) {
         article.append(footer);
         article.append(renderComments(post.id, comments));
 
-        const headings = isCanvasPost ? [] : extractHeadings(post.content);
+        const headings = isCanvasPost || isRichTextPost ? [] : extractHeadings(post.content);
         if (!headings.length) {
             app.append(article);
             return;
@@ -1530,6 +1619,27 @@ function createVisibilitySelector(selectedValue) {
     return fieldset;
 }
 
+function createCategorySelector(selectedValue = "") {
+    const select = document.createElement("select");
+    select.name = "category";
+    select.required = true;
+    select.setAttribute("aria-label", "카테고리");
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "카테고리 선택";
+    placeholder.disabled = true;
+    placeholder.selected = !selectedValue;
+    select.append(placeholder);
+    POST_CATEGORIES.forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        option.selected = selectedValue === value;
+        select.append(option);
+    });
+    return select;
+}
+
 function draftKey(userId, contentType = POST_CONTENT_TYPES.MARKDOWN) {
     return `rilog-draft:${userId}:${contentType}`;
 }
@@ -1643,6 +1753,7 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
         thumbnail.placeholder = "https://example.com/image.jpg";
         thumbnail.value = post?.thumbnailUrl || draft?.thumbnailUrl || "";
 
+        const category = createCategorySelector(post?.category || draft?.category || "");
         const visibility = createVisibilitySelector(post?.postStatus || draft?.postStatus || "PUBLIC");
 
         const actions = element("div", "form-actions editor-actions");
@@ -1656,6 +1767,7 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
                 title: title.value,
                 content: currentContent,
                 thumbnailUrl: thumbnail.value,
+                category: category.value,
                 postStatus: form.elements.postStatus.value
             });
             showToast("초안을 저장했어요.");
@@ -1680,6 +1792,7 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
             actions
         );
         form.querySelector(".editor-options").append(
+            formField("카테고리 · 필수", category),
             formField("썸네일 URL · 선택", thumbnail),
             visibility
         );
@@ -1701,6 +1814,11 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
                 content.focus();
                 return;
             }
+            if (!category.value) {
+                showToast("카테고리를 선택해주세요.");
+                category.focus();
+                return;
+            }
             submit.disabled = true;
             const payload = {
                 title: titleText,
@@ -1710,6 +1828,7 @@ async function renderEditor(editId, requestedType = POST_CONTENT_TYPES.MARKDOWN)
                         ? canvasSummary(body)
                         : body.replace(/\s+/g, " ").slice(0, 160),
                 thumbnailUrl: thumbnail.value.trim() || null,
+                category: category.value,
                 postStatus: form.elements.postStatus.value
             };
             try {
@@ -1746,7 +1865,11 @@ async function route() {
         link.classList.toggle("is-active", link.getAttribute("href") === `#${path}`);
     });
 
-    if (path === "/") return renderHome();
+    if (path === "/") {
+        const category = query.get("category");
+        const selectedCategory = POST_CATEGORIES.some(([value]) => value === category) ? category : DEFAULT_CATEGORY;
+        return renderHome(selectedCategory);
+    }
     if (path === "/me") return renderMyPosts();
     if (path === "/dashboard") return renderDashboard();
     if (path === "/settings/profile") return renderProfileSettings();

@@ -53,7 +53,7 @@ export async function getCurrentUser() {
     }
 }
 
-export const getPosts = () => request("/posts");
+export const getPosts = category => request(category ? `/posts?category=${encodeURIComponent(category)}` : "/posts");
 export const getPost = id => request(`/posts/${id}`);
 export const getMyPosts = () => request("/posts/me");
 export const getMyStats = () => request("/stats/me");
@@ -62,6 +62,10 @@ export const getUserPosts = username => request(`/users/${username}/posts`);
 export const getComments = postId => request(`/posts/${postId}/comments`);
 export const createComment = (postId, comment) => mutation(`/posts/${postId}/comments`, "POST", comment);
 export const deleteComment = (postId, commentId) => mutation(`/posts/${postId}/comments/${commentId}`, "DELETE");
+export const getAnnotations = postId => request(`/posts/${postId}/annotations`);
+export const createAnnotation = (postId, annotation) => mutation(`/posts/${postId}/annotations`, "POST", annotation);
+export const addAnnotationComment = (postId, annotationId, comment) => mutation(`/posts/${postId}/annotations/${annotationId}/comments`, "POST", comment);
+export const deleteAnnotationComment = (postId, annotationId, commentId) => mutation(`/posts/${postId}/annotations/${annotationId}/comments/${commentId}`, "DELETE");
 export const getLikedUsers = postId => request(`/posts/${postId}/likes/users`);
 export const createPost = post => mutation("/posts", "POST", post);
 export const updatePost = (id, post) => mutation(`/posts/${id}`, "PUT", post);
