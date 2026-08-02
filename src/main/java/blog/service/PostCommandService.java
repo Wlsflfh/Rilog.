@@ -2,6 +2,7 @@ package blog.service;
 
 import blog.controller.dto.PostRequest;
 import blog.domain.Post;
+import blog.domain.PostContentType;
 import blog.domain.User;
 import blog.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +18,14 @@ public class PostCommandService {
     private final PostFinder postFinder;
     private final UserService userService;
     private final SlugGenerator slugGenerator;
+    private final RichTextAnnotationExtractor richTextAnnotationExtractor;
+    private final PostAnnotationService postAnnotationService;
 
     @Transactional
     public Long create(Long userId, PostRequest request) {
         User user = userService.getUser(userId);
         String slug = slugGenerator.generate(userId, request.title());
+        validateRichText(request);
         Post post = new Post(
                 user,
                 request.title(),
@@ -30,7 +34,8 @@ public class PostCommandService {
                 request.postStatus(),
                 slug,
                 request.summary(),
-                request.contentTypeOrDefault()
+                request.contentTypeOrDefault(),
+                request.category()
         );
         return postRepository.save(post).getId();
     }
@@ -39,6 +44,7 @@ public class PostCommandService {
     public void update(Long postId, Long userId, PostRequest request) {
         Post post = postFinder.find(postId);
         post.ensureOwnedBy(userId);
+        validateRichText(request);
         post.update(
                 request.title(),
                 request.content(),
@@ -46,8 +52,15 @@ public class PostCommandService {
                 request.postStatus(),
                 post.getSlug(),
                 request.summary(),
-                post.getContentType()
+                request.contentTypeOrDefault(),
+                request.category()
         );
+        if (request.contentTypeOrDefault() == PostContentType.RICH_TEXT) {
+            postAnnotationService.syncDeletedAnnotations(
+                    postId,
+                    richTextAnnotationExtractor.extractAnnotationIds(request.content())
+            );
+        }
     }
 
     @Transactional
@@ -55,5 +68,11 @@ public class PostCommandService {
         Post post = postFinder.find(postId);
         post.ensureOwnedBy(userId);
         postRepository.delete(post);
+    }
+
+    private void validateRichText(PostRequest request) {
+        if (request.contentTypeOrDefault() == PostContentType.RICH_TEXT) {
+            richTextAnnotationExtractor.validate(request.content());
+        }
     }
 }

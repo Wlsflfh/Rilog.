@@ -10,6 +10,7 @@ import blog.repository.PostRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,8 +23,10 @@ class PostCommandServiceTest {
     private final PostFinder postFinder = mock(PostFinder.class);
     private final UserService userService = mock(UserService.class);
     private final SlugGenerator slugGenerator = mock(SlugGenerator.class);
+    private final RichTextAnnotationExtractor richTextAnnotationExtractor = mock(RichTextAnnotationExtractor.class);
+    private final PostAnnotationService postAnnotationService = mock(PostAnnotationService.class);
     private final PostCommandService postCommandService =
-            new PostCommandService(postRepository, postFinder, userService, slugGenerator);
+            new PostCommandService(postRepository, postFinder, userService, slugGenerator, richTextAnnotationExtractor, postAnnotationService);
 
     @Test
     @DisplayName("로그인한 사용자는 게시글을 작성할 수 있다.")
@@ -113,5 +116,33 @@ class PostCommandServiceTest {
         ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
         verify(postRepository).save(captor.capture());
         assertThat(captor.getValue().getCategory()).isEqualTo(PostCategory.EXERCISE);
+    }
+
+    @Test
+    @DisplayName("Rich Text 글을 수정하면 남아 있는 annotation id 기준으로 삭제된 anchor를 정리한다.")
+    void syncAnnotationsOnRichTextUpdate() {
+        // given
+        User user = new User("작성자", "author@example.com", null);
+        ReflectionTestUtils.setField(user, "id", 1L);
+        Post post = new Post(
+                user,
+                "제목",
+                "{\"type\":\"doc\",\"content\":[]}",
+                null,
+                PostStatus.PUBLIC,
+                "title",
+                null,
+                PostContentType.RICH_TEXT
+        );
+        given(postFinder.find(10L)).willReturn(post);
+        String content = "{\"type\":\"doc\",\"content\":[]}";
+        given(richTextAnnotationExtractor.extractAnnotationIds(content)).willReturn(java.util.Set.of(1L));
+        PostRequest request = new PostRequest("제목", content, null, null, PostContentType.RICH_TEXT, PostCategory.IT, PostStatus.PUBLIC);
+
+        // when
+        postCommandService.update(10L, 1L, request);
+
+        // then
+        verify(postAnnotationService).syncDeletedAnnotations(10L, java.util.Set.of(1L));
     }
 }

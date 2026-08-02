@@ -104,6 +104,7 @@ class AuthSecurityIntegrationTest {
                                 {
                                   "title": "제목",
                                   "content": "본문",
+                                  "category": "IT",
                                   "postStatus": "PUBLIC"
                                 }
                                 """))
@@ -177,12 +178,84 @@ class AuthSecurityIntegrationTest {
                                 {
                                   "title": "제목",
                                   "content": "본문",
+                                  "category": "IT",
                                   "postStatus": "PUBLIC"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.slug").value("제목"));
+                .andExpect(jsonPath("$.slug").value("제목"))
+                .andExpect(jsonPath("$.category").value("IT"));
+    }
+
+    @Test
+    @DisplayName("게시글 작성 시 카테고리는 필수다.")
+    void rejectPostWithoutCategory() throws Exception {
+        // given
+        User user = userRepository.save(new User("방문자", "visitor2", "visitor2@example.com", null));
+
+        // when - then
+        mockMvc.perform(post("/posts")
+                        .with(oidcLogin().oidcUser(principal(user.getId(), "visitor2@example.com")))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "제목",
+                                  "content": "본문",
+                                  "postStatus": "PUBLIC"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("로그인 사용자는 Rich Text 글에 문장 댓글을 작성하고 조회할 수 있다.")
+    void createAnnotationComment() throws Exception {
+        // given
+        User user = userRepository.save(new User("방문자", "visitor3", "visitor3@example.com", null));
+
+        String postLocation = mockMvc.perform(post("/posts")
+                        .with(oidcLogin().oidcUser(principal(user.getId(), "visitor3@example.com")))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "제목",
+                                  "content": "{\\"type\\":\\"doc\\",\\"content\\":[]}",
+                                  "contentType": "RICH_TEXT",
+                                  "category": "IT",
+                                  "postStatus": "PUBLIC"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        Long postId = Long.parseLong(postLocation.substring(postLocation.lastIndexOf("/") + 1));
+
+        // when - then
+        mockMvc.perform(post("/posts/" + postId + "/annotations")
+                        .with(oidcLogin().oidcUser(principal(user.getId(), "visitor3@example.com")))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "quotedText": "본문",
+                                  "content": "여기에 메모"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.quotedText").value("본문"))
+                .andExpect(jsonPath("$.comments[0].content").value("여기에 메모"));
+
+        mockMvc.perform(get("/posts/" + postId + "/annotations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].quotedText").value("본문"))
+                .andExpect(jsonPath("$[0].comments[0].content").value("여기에 메모"));
     }
 
     @Test

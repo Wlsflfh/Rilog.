@@ -26,7 +26,7 @@ public class SecurityConfig {
                                 "/error", "/oauth2/**", "/login/**", "/auth/csrf"
                         ).permitAll()
                         .requestMatchers("/posts/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/posts", "/posts/*", "/posts/*/comments", "/posts/*/likes/users", "/users/*", "/users/*/posts").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/posts", "/posts/*", "/posts/*/comments", "/posts/*/annotations", "/posts/*/likes/users", "/users/*", "/users/*/posts").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
