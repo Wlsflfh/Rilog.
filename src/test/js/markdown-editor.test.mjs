@@ -290,6 +290,30 @@ test("/toggle with heading marker keeps the marker in the details summary", () =
     assert.equal(result.value.slice(result.start, result.end), "토글 제목");
 });
 
+test("/therefore and /thus autocomplete insert the therefore symbol", () => {
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "/therefore ",
+        start: 11,
+        end: 11,
+        key: " "
+    }), {
+        value: "∴ ",
+        start: 2,
+        end: 2
+    });
+
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "/thus ",
+        start: 6,
+        end: 6,
+        key: " "
+    }), {
+        value: "∴ ",
+        start: 2,
+        end: 2
+    });
+});
+
 test("checkbox list autocomplete keeps checkbox markers", () => {
     assert.deepEqual(applyMarkdownAutocomplete({
         value: "- [ ] 할 일",
@@ -368,7 +392,21 @@ test("Tab indents blockquote and fenced code block lines", () => {
         start: 0,
         end: 14,
         outdent: false
-    }).value, ">     quote\n>     next");
+    }).value, "    > quote\n    > next");
+
+    assert.deepEqual(indentSelection({
+        value: "> quote",
+        start: 2,
+        end: 2,
+        outdent: false
+    }).value, "    > quote");
+
+    assert.deepEqual(indentSelection({
+        value: "    > quote",
+        start: 6,
+        end: 6,
+        outdent: true
+    }).value, "> quote");
 
     assert.deepEqual(indentSelection({
         value: "```\ncode\n```",
@@ -427,6 +465,30 @@ test("Shift+Enter keeps the cursor inside list and blockquote content", () => {
         value: nestedQuoteListResult,
         start: nestedQuoteListResult.length,
         end: nestedQuoteListResult.length
+    });
+});
+
+test("Enter continues and exits an indented blockquote like a list", () => {
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "    > 인용",
+        start: 8,
+        end: 8,
+        key: "Enter"
+    }), {
+        value: "    > 인용\n    > ",
+        start: 15,
+        end: 15
+    });
+
+    assert.deepEqual(applyMarkdownAutocomplete({
+        value: "    > ",
+        start: 6,
+        end: 6,
+        key: "Enter"
+    }), {
+        value: "    ",
+        start: 4,
+        end: 4
     });
 });
 

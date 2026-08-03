@@ -1,6 +1,7 @@
 package blog.service;
 
 import blog.domain.Post;
+import blog.domain.PostCategory;
 import blog.domain.PostViewEvent;
 import blog.domain.PostStatus;
 import blog.domain.exception.BlogException;
@@ -26,8 +27,15 @@ public class PostQueryService {
     private final PostFinder postFinder;
 
     public List<PostQueryResult> findAll(Long userId) {
+        return findAll(userId, null);
+    }
+
+    public List<PostQueryResult> findAll(Long userId, PostCategory category) {
+        List<Post> posts = category == null
+                ? postRepository.findByPostStatusOrderByCreatedAtDesc(PostStatus.PUBLIC)
+                : postRepository.findByPostStatusAndCategoryOrderByCreatedAtDesc(PostStatus.PUBLIC, category);
         return toResults(
-                postRepository.findByPostStatusOrderByCreatedAtDesc(PostStatus.PUBLIC),
+                posts,
                 userId
         );
     }

@@ -1,6 +1,7 @@
 package blog.controller.dto;
 
 import blog.domain.PostContentType;
+import blog.domain.PostCategory;
 import blog.domain.PostStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -23,6 +24,9 @@ public record PostRequest(
 
         PostContentType contentType,
 
+        @NotNull(message = "카테고리는 필수입니다.")
+        PostCategory category,
+
         @NotNull(message = "게시글 상태는 필수입니다.")
         PostStatus postStatus
 ) {
@@ -34,7 +38,7 @@ public record PostRequest(
             String thumbnailUrl,
             PostStatus postStatus
     ) {
-        this(title, content, summary, thumbnailUrl, null, postStatus);
+        this(title, content, summary, thumbnailUrl, null, PostCategory.IT, postStatus);
     }
 
     public PostContentType contentTypeOrDefault() {

@@ -1,6 +1,7 @@
 package blog.service;
 
 import blog.domain.Post;
+import blog.domain.PostCategory;
 import blog.domain.PostStatus;
 import blog.domain.exception.BlogException;
 import blog.repository.PostLikeRepository;
@@ -46,6 +47,24 @@ class PostQueryServiceTest {
         assertThat(results)
                 .extracting(PostQueryResult::liked)
                 .containsExactly(true, false);
+    }
+
+    @Test
+    @DisplayName("카테고리가 지정되면 해당 카테고리의 공개 글만 최신순으로 조회한다.")
+    void findAllByCategory() {
+        // given
+        Post itPost = mock(Post.class);
+        given(itPost.getId()).willReturn(1L);
+        given(postRepository.findByPostStatusAndCategoryOrderByCreatedAtDesc(PostStatus.PUBLIC, PostCategory.IT))
+                .willReturn(List.of(itPost));
+
+        // when
+        List<PostQueryResult> results = postQueryService.findAll(3L, PostCategory.IT);
+
+        // then
+        assertThat(results)
+                .extracting(PostQueryResult::post)
+                .containsExactly(itPost);
     }
 
     @Test

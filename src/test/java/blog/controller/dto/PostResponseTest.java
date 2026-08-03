@@ -1,6 +1,7 @@
 package blog.controller.dto;
 
 import blog.domain.Post;
+import blog.domain.PostCategory;
 import blog.domain.PostContentType;
 import blog.domain.PostStatus;
 import blog.domain.User;
@@ -37,5 +38,19 @@ class PostResponseTest {
 
         // then
         assertThat(response.contentType()).isEqualTo(PostContentType.CANVAS);
+    }
+
+    @Test
+    @DisplayName("게시글 카테고리를 응답에 포함한다.")
+    void includeCategory() {
+        // given
+        User user = new User("사용자", "user@example.com", null);
+        Post post = new Post(user, "제목", "본문", null, PostStatus.PUBLIC, "title", null, PostContentType.MARKDOWN, PostCategory.BOOK);
+
+        // when
+        PostResponse response = PostResponse.from(post, false);
+
+        // then
+        assertThat(response.category()).isEqualTo(PostCategory.BOOK);
     }
 }

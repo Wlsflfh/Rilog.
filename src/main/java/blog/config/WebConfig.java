@@ -7,7 +7,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import java.nio.file.Path;
 
 @Configuration
-public class WebConfig implements WebMvcConfigurer {
+public class  WebConfig implements WebMvcConfigurer {
 
     private static final Path UPLOAD_DIRECTORY = Path.of("src/main/resources/static/uploads");
 

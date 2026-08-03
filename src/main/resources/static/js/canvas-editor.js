@@ -1,3 +1,11 @@
+import {renderMarkdown} from "./markdown.js";
+import {
+    applyAutoPairEdit,
+    applyMarkdownAutocomplete,
+    applyMarkdownShortcut,
+    indentSelection
+} from "./markdown-editor.js";
+
 const CANVAS_VERSION = 1;
 const DEFAULT_TEXT_NODE = {
     width: 300,
@@ -9,6 +17,18 @@ const DEFAULT_IMAGE_NODE = {
     height: 240,
     alt: "image",
     aspectRatio: 1.5
+};
+const DEFAULT_FILE_NODE = {
+    width: 420,
+    height: 260
+};
+const DEFAULT_LINK_NODE = {
+    width: 360,
+    height: 180
+};
+const DEFAULT_GROUP_NODE = {
+    width: 560,
+    height: 360
 };
 const CANVAS_BOARD = {
     width: 12000,
@@ -22,6 +42,10 @@ const ZOOM = {
 const CANVAS_PAN_SPEED = 0.72;
 const TEXT_PLACEHOLDER = "생각을 적어보세요.";
 const CONNECTION_SIDES = ["top", "right", "bottom", "left"];
+const RENDER_ORIGIN_PADDING = {
+    x: 220,
+    y: 160
+};
 
 function createNodeId() {
     if (globalThis.crypto?.randomUUID) {
@@ -34,19 +58,47 @@ function createEdgeId() {
     return `edge-${createNodeId()}`;
 }
 
+function createSectionId() {
+    return `section-${createNodeId()}`;
+}
+
 function normalizeNumber(value, fallback) {
     return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function normalizeNodeType(node) {
+    if (node?.type === "image" || node?.type === "file" || node?.type === "link" || node?.type === "group") {
+        return node.type;
+    }
+
+    return "text";
+}
+
+function defaultNodeSize(type) {
+    switch (type) {
+        case "image":
+            return DEFAULT_IMAGE_NODE;
+        case "file":
+            return DEFAULT_FILE_NODE;
+        case "link":
+            return DEFAULT_LINK_NODE;
+        case "group":
+            return DEFAULT_GROUP_NODE;
+        default:
+            return DEFAULT_TEXT_NODE;
+    }
+}
+
 function normalizeNode(node, index) {
-    const type = node?.type === "image" ? "image" : "text";
+    const type = normalizeNodeType(node);
+    const defaultSize = defaultNodeSize(type);
     const base = {
         id: typeof node?.id === "string" && node.id.trim() ? node.id : createNodeId(),
         type,
         x: normalizeNumber(node?.x, 120 + index * 28),
         y: normalizeNumber(node?.y, 100 + index * 28),
-        width: normalizeNumber(node?.width, type === "image" ? DEFAULT_IMAGE_NODE.width : DEFAULT_TEXT_NODE.width),
-        height: normalizeNumber(node?.height, type === "image" ? DEFAULT_IMAGE_NODE.height : DEFAULT_TEXT_NODE.height)
+        width: normalizeNumber(node?.width, defaultSize.width),
+        height: normalizeNumber(node?.height, defaultSize.height)
     };
 
     if (type === "image") {
@@ -59,19 +111,49 @@ function normalizeNode(node, index) {
         };
     }
 
+    if (type === "file") {
+        return {
+            ...base,
+            file: typeof node?.file === "string" ? node.file : "",
+            ...(typeof node?.subpath === "string" && node.subpath ? {subpath: node.subpath} : {}),
+            ...(typeof node?.color === "string" && node.color ? {color: node.color} : {})
+        };
+    }
+
+    if (type === "link") {
+        return {
+            ...base,
+            url: typeof node?.url === "string" ? node.url : "",
+            ...(typeof node?.color === "string" && node.color ? {color: node.color} : {})
+        };
+    }
+
+    if (type === "group") {
+        return {
+            ...base,
+            ...(typeof node?.label === "string" && node.label ? {label: node.label} : {}),
+            ...(typeof node?.background === "string" && node.background ? {background: node.background} : {}),
+            ...(typeof node?.backgroundStyle === "string" && node.backgroundStyle ? {backgroundStyle: node.backgroundStyle} : {}),
+            ...(typeof node?.color === "string" && node.color ? {color: node.color} : {})
+        };
+    }
+
     return {
         ...base,
         content: typeof node?.content === "string" && node.content !== TEXT_PLACEHOLDER
                 ? node.content
-                : DEFAULT_TEXT_NODE.content
+                : typeof node?.text === "string"
+                        ? node.text
+                        : DEFAULT_TEXT_NODE.content,
+        ...(typeof node?.color === "string" && node.color ? {color: node.color} : {})
     };
 }
 
 function normalizeEdge(edge) {
     return {
         id: typeof edge?.id === "string" && edge.id.trim() ? edge.id : createEdgeId(),
-        from: typeof edge?.from === "string" ? edge.from : "",
-        to: typeof edge?.to === "string" ? edge.to : "",
+        from: typeof edge?.from === "string" ? edge.from : typeof edge?.fromNode === "string" ? edge.fromNode : "",
+        to: typeof edge?.to === "string" ? edge.to : typeof edge?.toNode === "string" ? edge.toNode : "",
         fromSide: CONNECTION_SIDES.includes(edge?.fromSide) ? edge.fromSide : "",
         toSide: CONNECTION_SIDES.includes(edge?.toSide) ? edge.toSide : ""
     };
@@ -83,6 +165,26 @@ function normalizeEdges(edges, nodes) {
             ? edges.map(normalizeEdge)
                     .filter(edge => edge.from && edge.to && edge.from !== edge.to)
                     .filter(edge => nodeIds.has(edge.from) && nodeIds.has(edge.to))
+            : [];
+}
+
+function normalizeSection(section, index) {
+    const title = typeof section?.title === "string" ? section.title.trim() : "";
+    if (!title) return null;
+
+    const zoom = normalizeNumber(section?.zoom, 1);
+    return {
+        id: typeof section?.id === "string" && section.id.trim() ? section.id : createSectionId(),
+        title,
+        centerX: normalizeNumber(section?.centerX, CANVAS_BOARD.width / 2 + index * 80),
+        centerY: normalizeNumber(section?.centerY, CANVAS_BOARD.height / 2 + index * 60),
+        zoom: Math.min(ZOOM.max, Math.max(ZOOM.min, zoom))
+    };
+}
+
+function normalizeSections(sections) {
+    return Array.isArray(sections)
+            ? sections.map(normalizeSection).filter(Boolean)
             : [];
 }
 
@@ -107,7 +209,8 @@ export function parseCanvasDocument(source = "") {
         return {
             version: CANVAS_VERSION,
             nodes,
-            edges: normalizeEdges(parsed.edges, nodes)
+            edges: normalizeEdges(parsed.edges, nodes),
+            sections: normalizeSections(parsed.sections)
         };
     } catch {
         return createEmptyCanvasDocument();
@@ -123,7 +226,48 @@ export function serializeCanvasDocument(document) {
         nodes,
         edges: normalizeEdges(document?.edges, nodes)
     };
+    const sections = normalizeSections(document?.sections);
+    if (sections.length) {
+        normalized.sections = sections;
+    }
     return JSON.stringify(normalized);
+}
+
+export function createCanvasSectionSnapshot(title, stageRect, viewport, overrides = {}) {
+    return normalizeSection({
+        id: createSectionId(),
+        title,
+        centerX: (normalizeNumber(stageRect?.width, 0) / 2 - normalizeNumber(viewport?.x, 0))
+                / normalizeNumber(viewport?.zoom, 1),
+        centerY: (normalizeNumber(stageRect?.height, 0) / 2 - normalizeNumber(viewport?.y, 0))
+                / normalizeNumber(viewport?.zoom, 1),
+        zoom: normalizeNumber(viewport?.zoom, 1),
+        ...overrides
+    }, 0);
+}
+
+export function createCanvasViewportForSection(stageRect, section) {
+    const zoom = Math.min(ZOOM.max, Math.max(ZOOM.min, normalizeNumber(section?.zoom, 1)));
+    return {
+        x: normalizeNumber(stageRect?.width, 0) / 2 - normalizeNumber(section?.centerX, CANVAS_BOARD.width / 2) * zoom,
+        y: normalizeNumber(stageRect?.height, 0) / 2 - normalizeNumber(section?.centerY, CANVAS_BOARD.height / 2) * zoom,
+        zoom
+    };
+}
+
+export function applyCanvasTextMarkdownEdit(state) {
+    if (state.key === "Tab") {
+        return indentSelection({
+            value: state.value,
+            start: state.start,
+            end: state.end,
+            outdent: Boolean(state.shiftKey)
+        });
+    }
+
+    return applyMarkdownShortcut(state)
+            || applyMarkdownAutocomplete(state)
+            || applyAutoPairEdit(state);
 }
 
 export function createCanvasTextNode(overrides = {}) {
@@ -315,11 +459,66 @@ function createCanvasNodeView(node) {
         return view;
     }
 
-    const content = createElement("div", "canvas-node-text");
-    content.textContent = node.content;
-    shell.append(content);
+    shell.append(createCanvasNodeContent(node));
     view.append(shell);
     return view;
+}
+
+function createCanvasNodeContent(node) {
+    if (node.type === "file") {
+        if (isImageFilePath(node.file)) {
+            const image = document.createElement("img");
+            image.src = node.file;
+            image.alt = node.file || "file";
+            image.draggable = false;
+            image.addEventListener("error", () => {
+                image.replaceWith(createCanvasFileAssetContent(node));
+            }, {once: true});
+            return image;
+        }
+
+        return createCanvasFileAssetContent(node);
+    }
+
+    if (node.type === "link") {
+        const content = createElement("a", "canvas-node-asset");
+        content.href = node.url || "#";
+        content.target = "_blank";
+        content.rel = "noreferrer";
+        content.append(
+            createElement("span", "canvas-node-kind", "Link"),
+            createElement("strong", null, node.url || "링크 없음")
+        );
+        return content;
+    }
+
+    if (node.type === "group") {
+        const content = createElement("div", "canvas-node-group-label");
+        content.textContent = node.label || "";
+        return content;
+    }
+
+    const content = renderMarkdown(node.content || "");
+    content.className = `${content.className || ""} canvas-node-markdown`.trim();
+    if (!String(node.content || "").trim()) {
+        content.append(createElement("p", "markdown-placeholder", TEXT_PLACEHOLDER));
+    }
+    return content;
+}
+
+function createCanvasFileAssetContent(node) {
+    const content = createElement("div", "canvas-node-asset");
+    content.append(
+        createElement("span", "canvas-node-kind", "File"),
+        createElement("strong", null, node.file || "파일 경로 없음")
+    );
+    if (node.subpath) content.append(createElement("small", null, node.subpath));
+    return content;
+}
+
+function isImageFilePath(value = "") {
+    const path = String(value).split(/[?#]/)[0].toLowerCase();
+    return /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/.test(path);
 }
 
 function nodeCenter(node) {
@@ -536,10 +735,43 @@ function calculateCanvasBoard(nodes) {
     };
 }
 
+export function createCanvasRenderLayout(documentData) {
+    const nodes = Array.isArray(documentData?.nodes)
+            ? documentData.nodes.map(normalizeNode)
+            : [];
+    const edges = normalizeEdges(documentData?.edges, nodes);
+    const sections = normalizeSections(documentData?.sections);
+    const bounds = calculateCanvasBounds(nodes);
+    const offsetX = nodes.length && bounds.minX < 0 ? Math.abs(bounds.minX) + RENDER_ORIGIN_PADDING.x : 0;
+    const offsetY = nodes.length && bounds.minY < 0 ? Math.abs(bounds.minY) + RENDER_ORIGIN_PADDING.y : 0;
+    const renderedNodes = offsetX || offsetY
+            ? nodes.map(node => ({
+                ...node,
+                x: node.x + offsetX,
+                y: node.y + offsetY
+            }))
+            : nodes;
+    const renderedSections = offsetX || offsetY
+            ? sections.map(section => ({
+                ...section,
+                centerX: section.centerX + offsetX,
+                centerY: section.centerY + offsetY
+            }))
+            : sections;
+
+    return {
+        nodes: renderedNodes,
+        edges,
+        sections: renderedSections,
+        board: calculateCanvasBoard(renderedNodes)
+    };
+}
+
 export function renderCanvasDocument(source = "") {
     const documentData = typeof source === "string" ? parseCanvasDocument(source) : parseCanvasDocument(serializeCanvasDocument(source));
     const root = createElement("div", "canvas-document canvas-board");
-    const board = calculateCanvasBoard(documentData.nodes);
+    const layout = createCanvasRenderLayout(documentData);
+    const board = layout.board;
     root.style.minWidth = `${Math.max(board.width, CANVAS_BOARD.width)}px`;
     root.style.minHeight = `${Math.max(board.height, CANVAS_BOARD.height)}px`;
     root.dataset.initialScrollLeft = String(board.scrollLeft);
@@ -548,21 +780,79 @@ export function renderCanvasDocument(source = "") {
     root.dataset.contentMinY = String(board.bounds.minY);
     root.dataset.contentMaxX = String(board.bounds.maxX);
     root.dataset.contentMaxY = String(board.bounds.maxY);
+    if (layout.sections.length) {
+        root.dataset.sections = JSON.stringify(layout.sections);
+    }
 
-    if (!documentData.nodes.length) {
+    if (!layout.nodes.length) {
         root.append(createElement("p", "canvas-empty", "아직 캔버스에 기록이 없어요."));
         return root;
     }
 
-    root.append(createCanvasEdgesView(documentData.edges, documentData.nodes));
-    documentData.nodes.forEach(node => {
+    root.append(createCanvasEdgesView(layout.edges, layout.nodes));
+    layout.nodes.forEach(node => {
         root.append(createCanvasNodeView(node));
     });
     return root;
 }
 
+export function createCanvasSectionNavigation(board, onSelect) {
+    let sections = [];
+    try {
+        sections = JSON.parse(board?.dataset?.sections || "[]");
+    } catch {
+        sections = [];
+    }
+
+    if (!sections.length) return null;
+
+    const navigation = createElement("nav", "canvas-section-nav");
+    navigation.setAttribute("aria-label", "Canvas 소제목");
+    sections.forEach(section => {
+        const button = createElement("button", "canvas-section-tab", section.title);
+        button.type = "button";
+        button.addEventListener("click", () => onSelect?.(section));
+        navigation.append(button);
+    });
+    return navigation;
+}
+
+export function moveCanvasViewportToSection(stage, board, viewport, section, {smooth = true} = {}) {
+    const target = createCanvasViewportForSection(stage.getBoundingClientRect(), section);
+    if (!smooth || typeof requestAnimationFrame !== "function") {
+        viewport.x = target.x;
+        viewport.y = target.y;
+        viewport.zoom = target.zoom;
+        applyCanvasViewport(board, viewport);
+        return target;
+    }
+
+    const start = {
+        x: viewport.x,
+        y: viewport.y,
+        zoom: viewport.zoom
+    };
+    const startTime = performance.now();
+    const duration = 420;
+    const ease = progress => 1 - Math.pow(1 - progress, 3);
+
+    const tick = now => {
+        const progress = Math.min(1, (now - startTime) / duration);
+        const eased = ease(progress);
+        viewport.x = start.x + (target.x - start.x) * eased;
+        viewport.y = start.y + (target.y - start.y) * eased;
+        viewport.zoom = start.zoom + (target.zoom - start.zoom) * eased;
+        applyCanvasViewport(board, viewport);
+        if (progress < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+    return target;
+}
+
 export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
     const documentData = parseCanvasDocument(initialValue);
+    documentData.sections = normalizeSections(documentData.sections);
     let selectedObject = null;
     const viewport = {
         x: 0,
@@ -572,6 +862,7 @@ export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
     const editor = createElement("div", "canvas-editor");
     editor.tabIndex = -1;
     const toolbar = createElement("div", "canvas-toolbar");
+    const sectionList = createElement("div", "canvas-section-list");
     const stage = createElement("div", "canvas-stage canvas-stage-editable");
     const board = createElement("div", "canvas-board");
     board.style.width = `${CANVAS_BOARD.width}px`;
@@ -581,6 +872,11 @@ export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
     fileInput.accept = "image/*";
     fileInput.className = "canvas-image-input";
     fileInput.setAttribute("aria-label", "Canvas 이미지 선택");
+    const canvasInput = document.createElement("input");
+    canvasInput.type = "file";
+    canvasInput.accept = ".canvas,application/json";
+    canvasInput.className = "canvas-file-input";
+    canvasInput.setAttribute("aria-label", "Obsidian Canvas 파일 선택");
 
     const emitChange = () => {
         onChange?.(serializeCanvasDocument(documentData));
@@ -687,6 +983,26 @@ export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
     const rerender = () => {
         render();
         applyCanvasViewport(board, viewport);
+        renderSectionList();
+    };
+
+    const moveToSection = section => {
+        const rect = stage.getBoundingClientRect();
+        const nextViewport = createCanvasViewportForSection(rect, section);
+        viewport.x = nextViewport.x;
+        viewport.y = nextViewport.y;
+        viewport.zoom = nextViewport.zoom;
+        applyCanvasViewport(board, viewport);
+    };
+
+    const renderSectionList = () => {
+        sectionList.replaceChildren();
+        documentData.sections.forEach(section => {
+            const sectionButton = createElement("button", "canvas-section-tab", section.title);
+            sectionButton.type = "button";
+            sectionButton.addEventListener("click", () => moveToSection(section));
+            sectionList.append(sectionButton);
+        });
     };
 
     const addNodeAtViewportCenter = nodeFactory => {
@@ -714,6 +1030,21 @@ export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
     addImage.type = "button";
     addImage.addEventListener("click", () => fileInput.click());
 
+    const importCanvas = createElement("button", "canvas-tool", ".canvas 가져오기");
+    importCanvas.type = "button";
+    importCanvas.addEventListener("click", () => canvasInput.click());
+
+    const addSection = createElement("button", "canvas-tool", "현재 화면 저장");
+    addSection.type = "button";
+    addSection.addEventListener("click", () => {
+        const title = window.prompt("이 화면의 소제목을 입력하세요.");
+        const section = createCanvasSectionSnapshot(title, stage.getBoundingClientRect(), viewport);
+        if (!section) return;
+        documentData.sections.push(section);
+        renderSectionList();
+        emitChange();
+    });
+
     fileInput.addEventListener("change", async () => {
         const file = fileInput.files?.[0];
         fileInput.value = "";
@@ -725,6 +1056,29 @@ export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
             aspectRatio,
             height: DEFAULT_IMAGE_NODE.width / aspectRatio
         }));
+    });
+
+    canvasInput.addEventListener("change", async () => {
+        const file = canvasInput.files?.[0];
+        canvasInput.value = "";
+        if (!file) return;
+
+        try {
+            const imported = parseCanvasDocument(await file.text());
+            documentData.nodes.splice(0, documentData.nodes.length, ...imported.nodes);
+            documentData.edges = imported.edges;
+            documentData.sections = imported.sections;
+            selectedObject = null;
+            rerender();
+            centerCanvasViewport(stage, viewport, documentData.nodes);
+            applyCanvasViewport(board, viewport);
+        } catch {
+            documentData.nodes.splice(0, documentData.nodes.length);
+            documentData.edges = [];
+            documentData.sections = [];
+            selectedObject = null;
+            rerender();
+        }
     });
 
     function startConnection(sourceNode, event) {
@@ -811,7 +1165,7 @@ export function createCanvasEditor({initialValue = "", onChange, uploadImage}) {
         event.preventDefault();
         deleteSelection();
     });
-    toolbar.append(addText, addImage, fileInput);
+    toolbar.append(addText, addImage, importCanvas, addSection, sectionList, fileInput, canvasInput);
     stage.append(board);
     editor.append(toolbar, stage);
     rerender();
@@ -840,19 +1194,18 @@ function createEditableCanvasNode(node, {selected = false, onSelect, onChange, o
             }
         }, {once: true});
         shell.append(image);
-    } else {
-        const text = createElement("textarea", "canvas-node-input");
-        text.value = node.content;
-        text.placeholder = TEXT_PLACEHOLDER;
-        text.setAttribute("aria-label", "Canvas 텍스트");
-        text.addEventListener("input", () => {
-            node.content = text.value;
-            onChange();
-        });
-        text.addEventListener("pointerdown", event => {
+    } else if (node.type === "text") {
+        shell.append(createCanvasNodeContent(node));
+        const openEditor = event => {
+            event.preventDefault();
             event.stopPropagation();
-        });
-        shell.append(text);
+            enterCanvasTextEdit(shell, node, onChange);
+        };
+        shell.addEventListener("click", openEditor);
+        shell.addEventListener("dblclick", openEditor);
+        view.addEventListener("dblclick", openEditor);
+    } else {
+        shell.append(createCanvasNodeContent(node));
     }
     view.append(shell);
 
@@ -873,6 +1226,56 @@ function createEditableCanvasNode(node, {selected = false, onSelect, onChange, o
     makeDraggable(view, view, node, onFrameChange, getZoom, () => onSelect?.(node.id));
     makeResizable(view, resizeHandle, node, onFrameChange, getZoom);
     return view;
+}
+
+function enterCanvasTextEdit(shell, node, onChange) {
+    if (shell.querySelector(".canvas-node-input")) return;
+
+    const text = createElement("textarea", "canvas-node-input");
+    text.value = node.content;
+    text.placeholder = TEXT_PLACEHOLDER;
+    text.setAttribute("aria-label", "Canvas 텍스트");
+
+    const finishEditing = () => {
+        node.content = text.value;
+        shell.replaceChildren(createCanvasNodeContent(node));
+        onChange();
+    };
+
+    text.addEventListener("input", () => {
+        node.content = text.value;
+        onChange();
+    });
+    text.addEventListener("pointerdown", event => {
+        event.stopPropagation();
+    });
+    text.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            finishEditing();
+            return;
+        }
+        const edit = applyCanvasTextMarkdownEdit({
+            value: text.value,
+            start: text.selectionStart,
+            end: text.selectionEnd,
+            key: event.key,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            shiftKey: event.shiftKey
+        });
+        if (!edit) return;
+        event.preventDefault();
+        text.value = edit.value;
+        text.setSelectionRange(edit.start, edit.end);
+        text.dispatchEvent(new Event("input", {bubbles: true}));
+    });
+    text.addEventListener("blur", finishEditing, {once: true});
+
+    shell.replaceChildren(text);
+    text.focus({preventScroll: true});
+    text.setSelectionRange(text.value.length, text.value.length);
 }
 
 export function enableCanvasPanZoom(stage, board, viewport = {x: 0, y: 0, zoom: 1}) {
@@ -958,8 +1361,8 @@ function makeDraggable(view, handle, node, onChange, getZoom, onSelect) {
             }
             moveEvent.preventDefault();
             const zoom = getZoom();
-            node.x = Math.max(0, originX + distanceX / zoom);
-            node.y = Math.max(0, originY + distanceY / zoom);
+            node.x = originX + distanceX / zoom;
+            node.y = originY + distanceY / zoom;
             applyNodeFrame(view, node);
             onChange();
         };

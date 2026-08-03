@@ -252,9 +252,9 @@ export function applyMarkdownAutocomplete(state) {
         return replaceRange(state.value, bounds.start, state.start, "---\n", bounds.start + 4);
     }
     if (key === "Enter") {
-        const quote = /^(\s*>\s*)$/.exec(line);
+        const quote = /^(\s*)>\s*$/.exec(line);
         if (quote) {
-            return replaceRange(state.value, bounds.start, state.start, "", bounds.start);
+            return replaceRange(state.value, bounds.start, state.start, quote[1], bounds.start + quote[1].length);
         }
 
         const emptyTaskList = /^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s*\[[ xX]?]\s*$/.exec(line);
@@ -304,6 +304,10 @@ export function applyMarkdownAutocomplete(state) {
             selectionStart,
             selectionStart + title.length
         );
+    }
+
+    if (/^\/(?:therefore|thus)\s$/i.test(line)) {
+        return replaceRange(state.value, bounds.start, state.start, "∴ ", bounds.start + 2);
     }
 
     if (/^((?:\s*>\s*)*\s*)((?:[-*+])|(?:\d+\.))\s+\[\s$/.test(line) && lineEnd.startsWith("]")) {
@@ -376,17 +380,9 @@ export function indentSelection({value, start, end, outdent = false}) {
     const block = value.slice(selectionStartLine, selectionEndLine);
     const lines = block.split("\n");
     const changed = lines.map(line => {
-        const quoteLine = /^((?:\s*>\s*)+)(.*)$/.exec(line);
         if (!outdent) {
             if (!line) return line;
-            return quoteLine ? `${quoteLine[1]}${INDENT}${quoteLine[2]}` : `${INDENT}${line}`;
-        }
-        if (quoteLine) {
-            const content = quoteLine[2];
-            if (content.startsWith(INDENT)) return `${quoteLine[1]}${content.slice(INDENT.length)}`;
-            if (content.startsWith("\t")) return `${quoteLine[1]}${content.slice(1)}`;
-            const quotePartialIndent = /^ {1,3}/.exec(content);
-            return quotePartialIndent ? `${quoteLine[1]}${content.slice(quotePartialIndent[0].length)}` : line;
+            return `${INDENT}${line}`;
         }
         if (line.startsWith(INDENT)) return line.slice(INDENT.length);
         if (line.startsWith("\t")) return line.slice(1);
